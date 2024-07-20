@@ -130,7 +130,7 @@ packages:
     description:
       path: flutter_inappwebview
       ref: HEAD
-      resolved-ref: b0ee29bbed9d408d55cf274a884871bb1e33f275
+      resolved-ref: c0edce2c84a4a5e081a23a017e0e70ea69e4be5b
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "6.0.0"
@@ -139,7 +139,7 @@ packages:
     description:
       path: flutter_inappwebview_android
       ref: HEAD
-      resolved-ref: b0ee29bbed9d408d55cf274a884871bb1e33f275
+      resolved-ref: c0edce2c84a4a5e081a23a017e0e70ea69e4be5b
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "1.0.13"
@@ -156,7 +156,7 @@ packages:
     description:
       path: flutter_inappwebview_ios
       ref: HEAD
-      resolved-ref: b0ee29bbed9d408d55cf274a884871bb1e33f275
+      resolved-ref: c0edce2c84a4a5e081a23a017e0e70ea69e4be5b
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "1.0.13"
@@ -165,7 +165,7 @@ packages:
     description:
       path: flutter_inappwebview_macos
       ref: HEAD
-      resolved-ref: b0ee29bbed9d408d55cf274a884871bb1e33f275
+      resolved-ref: c0edce2c84a4a5e081a23a017e0e70ea69e4be5b
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "1.0.11"
@@ -174,7 +174,7 @@ packages:
     description:
       path: flutter_inappwebview_platform_interface
       ref: HEAD
-      resolved-ref: b0ee29bbed9d408d55cf274a884871bb1e33f275
+      resolved-ref: c0edce2c84a4a5e081a23a017e0e70ea69e4be5b
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "1.0.11"
@@ -183,7 +183,7 @@ packages:
     description:
       path: flutter_inappwebview_web
       ref: HEAD
-      resolved-ref: b0ee29bbed9d408d55cf274a884871bb1e33f275
+      resolved-ref: c0edce2c84a4a5e081a23a017e0e70ea69e4be5b
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "1.0.8"
@@ -192,7 +192,7 @@ packages:
     description:
       path: flutter_inappwebview_windows
       ref: HEAD
-      resolved-ref: b0ee29bbed9d408d55cf274a884871bb1e33f275
+      resolved-ref: c0edce2c84a4a5e081a23a017e0e70ea69e4be5b
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "1.0.11"

@@ -55,15 +55,15 @@ class _InappViewPageState extends State<InappViewPage> {
           //error.toString()
         },
         onJsConfirm: (controller, jsConfirmRequest) async {
-          print("JsConfirmRequest: ${jsConfirmRequest.message}");
+          //print("JsConfirmRequest: ${jsConfirmRequest.message}");
           return JsConfirmResponse(action: JsConfirmResponseAction.CONFIRM);
         },
         onJsAlert: (controller, jsAlertRequest) async {
-          print("JsAlertRequest: ${jsAlertRequest.message}");
+          //print("JsAlertRequest: ${jsAlertRequest.message}");
           return JsAlertResponse(action: JsAlertResponseAction.CONFIRM);
         },
         onJsPrompt: (controller, jsPromptRequest) async {
-          print("JsPromptRequest: ${jsPromptRequest.message}");
+          //print("JsPromptRequest: ${jsPromptRequest.message}");
           return JsPromptResponse(action: JsPromptResponseAction.CONFIRM);
         },
       ),

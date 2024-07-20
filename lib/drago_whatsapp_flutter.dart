@@ -8,7 +8,6 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter/foundation.dart';
 
 class DragoWhatsappFlutter {
-  /// call [connect] to connect with Mobile
   static Future<WhatsappClient?> connect({
     bool saveSession = false,
     int qrCodeWaitDurationSeconds = 60,
@@ -48,7 +47,6 @@ class DragoWhatsappFlutter {
     }
   }
 
-  /// call [connect] to connect with Mobile
   static Future<WhatsappClient?> connectWithInAppBrowser({
     required InAppWebViewController controller,
     int qrCodeWaitDurationSeconds = 60,
@@ -76,7 +74,6 @@ class DragoWhatsappFlutter {
     }
   }
 
-  // Helper methods
   /// to run webView in headless mode and connect with it
   static Future<WhatsappFlutterClient> _getHeadLessInAppBrowser(
       bool keepSession) async {
@@ -118,21 +115,23 @@ class DragoWhatsappFlutter {
             );
           }
         }
-        if (!completer.isCompleted) completer.complete(controller);
+        if (!completer.isCompleted) {
+          completer.complete(controller);
+        }
       },
       onReceivedError: (controller, request, error) async {
         if (!completer.isCompleted) completer.completeError(error.toString());
       },
       onJsConfirm: (controller, jsConfirmRequest) async {
-        print("JsConfirmRequest: ${jsConfirmRequest.message}");
+        //print("JsConfirmRequest: ${jsConfirmRequest.message}");
         return JsConfirmResponse(action: JsConfirmResponseAction.CONFIRM);
       },
       onJsAlert: (controller, jsAlertRequest) async {
-        print("JsAlertRequest: ${jsAlertRequest.message}");
+        //print("JsAlertRequest: ${jsAlertRequest.message}");
         return JsAlertResponse(action: JsAlertResponseAction.CONFIRM);
       },
       onJsPrompt: (controller, jsPromptRequest) async {
-        print("JsPromptRequest: ${jsPromptRequest.message}");
+        //print("JsPromptRequest: ${jsPromptRequest.message}");
         return JsPromptResponse(action: JsPromptResponseAction.CONFIRM);
       },
     );
