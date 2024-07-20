@@ -49,7 +49,7 @@ class DragoWhatsappFlutter {
   }
 
   /// call [connect] to connect with Mobile
-  static Future<WhatsappClient?> connectWithInAppBroser({
+  static Future<WhatsappClient?> connectWithInAppBrowser({
     required InAppWebViewController controller,
     int qrCodeWaitDurationSeconds = 60,
     Function(String qrCodeUrl, Uint8List? qrCodeImage)? onQrCode,

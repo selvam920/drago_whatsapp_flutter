@@ -53,7 +53,7 @@ class HomeController extends GetxController {
     connected.value = false;
     try {
       if (inAppBrowser) {
-        client = await DragoWhatsappFlutter.connectWithInAppBroser(
+        client = await DragoWhatsappFlutter.connectWithInAppBrowser(
             controller: controller!);
       } else {
         client = await DragoWhatsappFlutter.connect(
