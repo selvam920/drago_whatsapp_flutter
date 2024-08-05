@@ -5,7 +5,7 @@ homepage:
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
-  flutter: ">=1.17.0"
+  flutter: ">=3.0.0"
 
 dependencies:
   flutter:
@@ -24,26 +24,26 @@ dependencies:
 #     git:
 #       url: https://github.com/selvam920/flutter_inappwebview
 #       path: flutter_inappwebview_platform_interface
-#   flutter_inappwebview_android:
-#     git:
-#       url: https://github.com/selvam920/flutter_inappwebview
-#       path: flutter_inappwebview_android
-#   flutter_inappwebview_ios:
-#     git:
-#       url: https://github.com/selvam920/flutter_inappwebview
-#       path: flutter_inappwebview_ios
-#   flutter_inappwebview_macos:
-#     git:
-#       url: https://github.com/selvam920/flutter_inappwebview
-#       path: flutter_inappwebview_macos
-#   flutter_inappwebview_web:
-#     git:
-#       url: https://github.com/selvam920/flutter_inappwebview
-#       path: flutter_inappwebview_web
-#   flutter_inappwebview_windows:
-#     git:
-#       url: https://github.com/selvam920/flutter_inappwebview
-#       path: flutter_inappwebview_windows
+  # flutter_inappwebview_android:
+  #   git:
+  #     url: https://github.com/selvam920/flutter_inappwebview
+  #     path: flutter_inappwebview_android
+  # flutter_inappwebview_ios:
+  #   git:
+  #     url: https://github.com/selvam920/flutter_inappwebview
+  #     path: flutter_inappwebview_ios
+  # flutter_inappwebview_macos:
+  #   git:
+  #     url: https://github.com/selvam920/flutter_inappwebview
+  #     path: flutter_inappwebview_macos
+  # flutter_inappwebview_web:
+  #   git:
+  #     url: https://github.com/selvam920/flutter_inappwebview
+  #     path: flutter_inappwebview_web
+  # flutter_inappwebview_windows:
+  #   git:
+  #     url: https://github.com/selvam920/flutter_inappwebview
+  #     path: flutter_inappwebview_windows
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,7 @@
 library drago_whatsapp_flutter;
 
 import 'dart:async';
+import 'dart:io';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_client.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_inapp_client.dart';
@@ -19,6 +20,7 @@ class DragoWhatsappFlutter {
     WpClientInterface? wpClient;
 
     try {
+      HttpOverrides.global = MyHttpOverrides();
       onConnectionEvent?.call(ConnectionEvent.initializing);
 
       wpClient = await _getHeadLessInAppBrowser(saveSession);
@@ -57,6 +59,8 @@ class DragoWhatsappFlutter {
     WpClientInterface? wpClient;
 
     try {
+      HttpOverrides.global = MyHttpOverrides();
+
       wpClient = WhatsappInAppFlutterClient(controller: controller);
       await WppConnect.init(wpClient);
       await waitForLogin(
@@ -143,5 +147,13 @@ class DragoWhatsappFlutter {
       controller: controller,
       headlessInAppWebView: headlessWebView,
     );
+  }
+}
+
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (cert, host, port) => true;
   }
 }
