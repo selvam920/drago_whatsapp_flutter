@@ -64,6 +64,7 @@ Future waitForLogin(
       //   throw 'Phone not connected';
       // }
 
+      await Future.delayed(const Duration(seconds: 1));
       WhatsappLogger.log('Connected successfully');
       onConnectionEvent?.call(ConnectionEvent.connected);
     } else {
@@ -79,6 +80,7 @@ Future waitForLogin(
     //   WhatsappLogger.log('Phone not connected');
     //   throw 'Phone not connected';
     // }
+    await Future.delayed(const Duration(seconds: 1));
     WhatsappLogger.log('Connected successfully');
     onConnectionEvent?.call(ConnectionEvent.connected);
   }
