@@ -58,11 +58,11 @@ Future waitForLogin(
       WhatsappLogger.log('Checking phone is connected...');
 
       onConnectionEvent?.call(ConnectionEvent.connecting);
-      bool inChat = await _waitForInChat(wpClient);
-      if (!inChat) {
-        WhatsappLogger.log('Phone not connected');
-        throw 'Phone not connected';
-      }
+      //bool inChat = await _waitForInChat(wpClient);
+      // if (!inChat) {
+      //   WhatsappLogger.log('Phone not connected');
+      //   throw 'Phone not connected';
+      // }
 
       WhatsappLogger.log('Connected successfully');
       onConnectionEvent?.call(ConnectionEvent.connected);
@@ -74,11 +74,11 @@ Future waitForLogin(
     WhatsappLogger.log('Checking phone is connected...');
 
     onConnectionEvent?.call(ConnectionEvent.connecting);
-    bool inChat = await _waitForInChat(wpClient);
-    if (!inChat) {
-      WhatsappLogger.log('Phone not connected');
-      throw 'Phone not connected';
-    }
+    // bool inChat = await _waitForInChat(wpClient);
+    // if (!inChat) {
+    //   WhatsappLogger.log('Phone not connected');
+    //   throw 'Phone not connected';
+    // }
     WhatsappLogger.log('Connected successfully');
     onConnectionEvent?.call(ConnectionEvent.connected);
   }
