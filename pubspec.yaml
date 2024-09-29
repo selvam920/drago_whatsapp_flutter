@@ -14,21 +14,12 @@ dependencies:
   http: any
   zxing2: any
   mime: any
-  flutter_inappwebview:
-    git:
-      url: https://github.com/selvam920/flutter_inappwebview
-      path: flutter_inappwebview
-
-dependency_overrides:
-  flutter_inappwebview_platform_interface:
-    git:
-      url: https://github.com/selvam920/flutter_inappwebview
-      path: flutter_inappwebview_platform_interface
+  flutter_inappwebview: any
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^5.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

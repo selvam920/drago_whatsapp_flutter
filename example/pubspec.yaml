@@ -38,10 +38,6 @@ dependencies:
   get: ^4.6.5
   flex_color_scheme: ^7.3.1
   file_picker: ^8.0.0+1
-  flutter_inappwebview:
-    git:
-      url: https://github.com/selvam920/flutter_inappwebview
-      path: flutter_inappwebview
   drago_whatsapp_flutter:
     path: ..
 
@@ -54,13 +50,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^4.0.0
-
-dependency_overrides:
-  flutter_inappwebview_platform_interface:
-    git:
-      url: https://github.com/selvam920/flutter_inappwebview
-      path: flutter_inappwebview_platform_interface
+  flutter_lints: ^5.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
