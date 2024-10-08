@@ -1,7 +1,7 @@
 name: drago_whatsapp_flutter
-description: "A new Flutter package project."
-version: 0.0.1
-homepage:
+description: "This plugin will allow to send text, files in the background using whatsapp web"
+version: 0.0.4
+homepage: https://github.com/selvam920/drago_whatsapp_flutter
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -11,10 +11,10 @@ dependencies:
   flutter:
     sdk: flutter
 
-  http: any
-  zxing2: any
-  mime: any
-  flutter_inappwebview: any
+  http: ^1.2.2
+  zxing2: ^0.2.3
+  mime: ^2.0.0
+  flutter_inappwebview: ^6.1.3
 
 dev_dependencies:
   flutter_test:

@@ -38,6 +38,7 @@ dependencies:
   get: ^4.6.5
   flex_color_scheme: ^7.3.1
   file_picker: ^8.0.0+1
+  flutter_inappwebview: any
   drago_whatsapp_flutter:
     path: ..
 

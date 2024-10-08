@@ -1,5 +1,3 @@
-library drago_whatsapp_flutter;
-
 import 'dart:async';
 import 'dart:io';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
