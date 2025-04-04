@@ -86,7 +86,7 @@ Future waitForLogin(
   }
 }
 
-Future<bool> _waitForInChat(WpClientInterface wpClient) async {
+Future<bool> waitForInChat(WpClientInterface wpClient) async {
   var inChat = await WppAuth(wpClient).isMainReady();
   if (inChat) return true;
   Completer<bool> completer = Completer();

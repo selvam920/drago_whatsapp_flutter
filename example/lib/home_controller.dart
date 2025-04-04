@@ -109,7 +109,7 @@ class HomeController extends GetxController {
     });
 
     // listen to MessageEvents
-    client.on(WhatsappEvent.chat_new_message, (data) {
+    client.on(WhatsappEvent.chatnewmessage, (data) {
       List<Message> messages = Message.parse(data);
       if (messages.isEmpty) return;
       Message message = messages.first;
@@ -128,7 +128,7 @@ class HomeController extends GetxController {
     });
 
     // listen to CallEvents
-    client.on(WhatsappEvent.incoming_call, (data) {
+    client.on(WhatsappEvent.incomingCall, (data) {
       List<CallEvent> events = CallEvent.parse(data);
       if (events.isEmpty) return;
       CallEvent event = events.first;
@@ -140,7 +140,7 @@ class HomeController extends GetxController {
       );
     });
 
-    client.on(WhatsappEvent.chat_msg_revoke, (data) {
+    client.on(WhatsappEvent.chatmsgrevoke, (data) {
       Get.log("Revoking Event : $data");
     });
   }
