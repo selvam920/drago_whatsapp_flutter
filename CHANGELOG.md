@@ -14,6 +14,6 @@
 
 * Removed Windows webview path changes in this package.
 
-## 0.0.5
+## 0.0.6
 
 * Added session directory path
