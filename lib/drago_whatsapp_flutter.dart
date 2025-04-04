@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 class DragoWhatsappFlutter {
   static Future<WhatsappClient?> connect({
     bool saveSession = false,
+    String? sessionPath,
     int qrCodeWaitDurationSeconds = 60,
     Function(String qrCodeUrl, Uint8List? qrCodeImage)? onQrCode,
     Function(ConnectionEvent)? onConnectionEvent,
@@ -21,7 +22,8 @@ class DragoWhatsappFlutter {
       HttpOverrides.global = MyHttpOverrides();
       onConnectionEvent?.call(ConnectionEvent.initializing);
 
-      wpClient = await _getHeadLessInAppBrowser(saveSession);
+      wpClient =
+          await _getHeadLessInAppBrowser(saveSession, sessionPath: sessionPath);
 
       if (wpClient is WhatsappFlutterClient) {
         onWebViewCreated?.call(wpClient.headlessInAppWebView!);
@@ -78,7 +80,8 @@ class DragoWhatsappFlutter {
 
   /// to run webView in headless mode and connect with it
   static Future<WhatsappFlutterClient> _getHeadLessInAppBrowser(
-      bool keepSession) async {
+      bool keepSession,
+      {String? sessionPath}) async {
     Completer<InAppWebViewController> completer = Completer();
     PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
 
@@ -104,6 +107,7 @@ class DragoWhatsappFlutter {
         preferredContentMode: UserPreferredContentMode.DESKTOP,
         userAgent: WhatsAppMetadata.userAgent,
         javaScriptEnabled: true,
+        appCachePath: sessionPath,
         incognito: !keepSession,
         clearCache: !keepSession,
         cacheEnabled: keepSession,
