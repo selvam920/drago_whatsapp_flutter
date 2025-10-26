@@ -8,11 +8,18 @@ class WppConnect {
   static Future init(
     WpClientInterface wpClient, {
     String? wppJsContent,
+    String? wppVersion,
   }) async {
-    String latestBuildUrl =
-        "https://github.com/wppconnect-team/wa-js/releases/latest/download/wppconnect-wa.js";
+    String wppUrl;
+    if (wppVersion != null && wppVersion.isNotEmpty) {
+      wppUrl =
+          "https://github.com/wppconnect-team/wa-js/releases/download/$wppVersion/wppconnect-wa.js";
+    } else {
+      wppUrl =
+          "https://github.com/wppconnect-team/wa-js/releases/latest/download/wppconnect-wa.js";
+    }
     // Web not able to download from this url, either replace this with another url, or pass the wppJsContent
-    String content = wppJsContent ?? await http.read(Uri.parse(latestBuildUrl));
+    String content = wppJsContent ?? await http.read(Uri.parse(wppUrl));
     await wpClient.injectJs(content);
 
     WhatsappLogger.log("injected Wpp");

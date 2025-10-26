@@ -15,6 +15,7 @@ class DragoWhatsappFlutter {
     Function(ConnectionEvent)? onConnectionEvent,
     Duration? connectionTimeout = const Duration(seconds: 20),
     Function(HeadlessInAppWebView? headlessInAppWebView)? onWebViewCreated,
+    String? wppVersion,
   }) async {
     WpClientInterface? wpClient;
 
@@ -29,7 +30,7 @@ class DragoWhatsappFlutter {
         onWebViewCreated?.call(wpClient.headlessInAppWebView!);
       }
 
-      await WppConnect.init(wpClient);
+      await WppConnect.init(wpClient, wppVersion: wppVersion);
 
       onConnectionEvent?.call(ConnectionEvent.waitingForLogin);
 
@@ -55,6 +56,7 @@ class DragoWhatsappFlutter {
     Function(String qrCodeUrl, Uint8List? qrCodeImage)? onQrCode,
     Function(ConnectionEvent)? onConnectionEvent,
     Duration? connectionTimeout = const Duration(seconds: 20),
+    String? wppVersion,
   }) async {
     WpClientInterface? wpClient;
 
@@ -62,7 +64,7 @@ class DragoWhatsappFlutter {
       HttpOverrides.global = MyHttpOverrides();
 
       wpClient = WhatsappInAppFlutterClient(controller: controller);
-      await WppConnect.init(wpClient);
+      await WppConnect.init(wpClient, wppVersion: wppVersion);
       await waitForLogin(
         wpClient,
         onConnectionEvent: onConnectionEvent,

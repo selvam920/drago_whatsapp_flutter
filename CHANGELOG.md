@@ -17,3 +17,7 @@
 ## 0.0.6
 
 * Added session directory path
+
+## 0.0.7
+
+* use wpp connect specific version

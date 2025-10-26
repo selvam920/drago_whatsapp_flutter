@@ -1,6 +1,6 @@
 name: drago_whatsapp_flutter
 description: "This plugin will allow to send text, files in the background using whatsapp web"
-version: 0.0.6
+version: 0.0.7
 homepage: https://github.com/selvam920/drago_whatsapp_flutter
 
 environment:
@@ -19,7 +19,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
