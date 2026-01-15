@@ -1,8 +1,0 @@
-Analyzing drago_whatsapp_flutter...                             
-
-   info - Missing type annotation - lib\src\helper\utils.dart:12:19 - strict_top_level_inference
-   info - Missing type annotation - lib\src\helper\utils.dart:58:10 - strict_top_level_inference
-   info - Missing type annotation - lib\src\model\call_event.dart:36:32 - strict_top_level_inference
-   info - Missing type annotation - lib\src\model\message.dart:123:30 - strict_top_level_inference
-   info - Missing type annotation - lib\src\wpp\wpp_events.dart:26:27 - strict_top_level_inference
-
