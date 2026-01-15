@@ -25,3 +25,7 @@
 ## 0.0.8
 
 * added clear session method.
+
+## 0.0.9
+
+* fixed clear cache issue.
