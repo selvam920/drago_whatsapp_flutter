@@ -22,3 +22,7 @@ This plugin will allow to access whatsapp in the background to send text, files,
         phone: phoneNumber.text,
         message: message.text,
       );
+
+### Clear Session
+
+    await client?.clearSession(); // This will clear session files and cookies
