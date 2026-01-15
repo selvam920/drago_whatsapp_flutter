@@ -54,6 +54,11 @@ class HomeView extends GetView<HomeController> {
                               onPressed: () => controller.disconnect(),
                               child: const Text("Disconnect"),
                             ),
+                            const SizedBox(width: 10),
+                            ElevatedButton(
+                              onPressed: () => controller.clearSession(),
+                              child: const Text("Clear Session"),
+                            ),
                           ],
                         ),
 

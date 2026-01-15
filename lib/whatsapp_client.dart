@@ -7,9 +7,13 @@ class WhatsappFlutterClient implements WpClientInterface {
   InAppWebViewController? controller;
   HeadlessInAppWebView? headlessInAppWebView;
 
+  @override
+  String? sessionPath;
+
   WhatsappFlutterClient({
     required this.controller,
     required this.headlessInAppWebView,
+    this.sessionPath,
   });
 
   @override

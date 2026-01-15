@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drago_whatsapp_flutter/drago_whatsapp_flutter.dart';
 import 'package:drago_whatsapp_flutter/src/wpp/wpp_conn.dart';
 import 'package:drago_whatsapp_flutter/src/wpp/wpp_group.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
@@ -68,7 +69,20 @@ class WhatsappClient {
   }) async {
     try {
       if (tryLogout) await logout();
-      wpClient.dispose();
+      await wpClient.dispose();
+    } catch (e) {
+      WhatsappLogger.log(e);
+    }
+  }
+
+  /// [clearSession] will logout, disconnect and delete the session data
+  Future<void> clearSession({
+    bool tryLogout = true,
+  }) async {
+    try {
+      String? sessionPath = wpClient.sessionPath;
+      await disconnect(tryLogout: tryLogout);
+      await DragoWhatsappFlutter.clearSession(sessionPath: sessionPath);
     } catch (e) {
       WhatsappLogger.log(e);
     }

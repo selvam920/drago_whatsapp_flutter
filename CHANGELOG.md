@@ -21,3 +21,7 @@
 ## 0.0.7
 
 * use wpp connect specific version
+
+## 0.0.8
+
+* added clear session method.

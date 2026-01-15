@@ -6,8 +6,12 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 class WhatsappInAppFlutterClient implements WpClientInterface {
   InAppWebViewController? controller;
 
+  @override
+  String? sessionPath;
+
   WhatsappInAppFlutterClient({
     required this.controller,
+    this.sessionPath,
   });
 
   @override

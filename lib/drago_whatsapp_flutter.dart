@@ -25,6 +25,7 @@ class DragoWhatsappFlutter {
 
       wpClient =
           await _getHeadLessInAppBrowser(saveSession, sessionPath: sessionPath);
+      wpClient.sessionPath = sessionPath;
 
       if (wpClient is WhatsappFlutterClient) {
         onWebViewCreated?.call(wpClient.headlessInAppWebView!);
@@ -64,6 +65,8 @@ class DragoWhatsappFlutter {
       HttpOverrides.global = MyHttpOverrides();
 
       wpClient = WhatsappInAppFlutterClient(controller: controller);
+      wpClient.sessionPath =
+          null; // InAppBrowser might not expose session path easily or it's handled by controller
       await WppConnect.init(wpClient, wppVersion: wppVersion);
       await waitForLogin(
         wpClient,
@@ -151,6 +154,26 @@ class DragoWhatsappFlutter {
       controller: controller,
       headlessInAppWebView: headlessWebView,
     );
+  }
+
+  /// [clearSession] will delete the session data and cookies
+  static Future<void> clearSession({String? sessionPath}) async {
+    try {
+      if (sessionPath != null) {
+        Directory directory = Directory(sessionPath);
+        try {
+          if (await directory.exists()) {
+            await directory.delete(recursive: true);
+          }
+        } catch (e) {
+          WhatsappLogger.log(e);
+        }
+      }
+      await CookieManager.instance().deleteAllCookies();
+      await InAppWebViewController.clearAllCache();
+    } catch (e) {
+      WhatsappLogger.log(e);
+    }
   }
 }
 

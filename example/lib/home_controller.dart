@@ -150,6 +150,11 @@ class HomeController extends GetxController {
     connected.value = false;
   }
 
+  Future<void> clearSession() async {
+    await client?.clearSession(tryLogout: true);
+    connected.value = false;
+  }
+
   Future<void> sendMessage() async {
     if (!formKey.currentState!.validate()) return;
     try {

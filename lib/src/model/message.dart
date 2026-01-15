@@ -120,7 +120,7 @@ class Message {
 
   /// Because Mobile platforms returns data as list
   /// and desktop returns as map , so to unify the data
-  static List<Message> parse(data) {
+  static List<Message> parse(dynamic data) {
     if (data == null) return [];
     if (data is List) {
       return data.map((e) => Message.fromJson(e)).toList();

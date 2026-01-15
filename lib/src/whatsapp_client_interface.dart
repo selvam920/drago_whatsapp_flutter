@@ -25,4 +25,5 @@ abstract class WpClientInterface {
   Future<void> on(String event, Function(dynamic) callback);
 
   Future<void> off(String event);
+  String? sessionPath;
 }

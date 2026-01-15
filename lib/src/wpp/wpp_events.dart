@@ -23,7 +23,7 @@ class WppEvents {
     }
   }
 
-  void _onConnectionEvent(event) {
+  void _onConnectionEvent(dynamic event) {
     ConnectionEvent? connectionEvent;
     switch (event) {
       case "authenticated":

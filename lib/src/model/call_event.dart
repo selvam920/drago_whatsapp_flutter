@@ -33,7 +33,7 @@ class CallEvent {
     );
   }
 
-  static List<CallEvent> parse(data) {
+  static List<CallEvent> parse(dynamic data) {
     if (data == null) return [];
     if (data is List) {
       return data.map((e) => CallEvent.fromJson(e)).toList();

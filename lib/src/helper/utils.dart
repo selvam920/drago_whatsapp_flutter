@@ -9,7 +9,7 @@ class WhatsappLogger {
 
   static Function(dynamic)? handleLogs;
 
-  static void log(log) {
+  static void log(dynamic log) {
     if (!enableLogger) return;
     if (handleLogs != null) {
       handleLogs?.call(log);
@@ -55,7 +55,7 @@ class WhatsappBotUtils {
   }
 
   /// To print logs from this library set `enableLogs(true)`, by default its false
-  static enableLogs(bool enable) {
+  static void enableLogs(bool enable) {
     WhatsappLogger.enableLogger = enable;
   }
 }
