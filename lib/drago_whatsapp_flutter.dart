@@ -170,7 +170,9 @@ class DragoWhatsappFlutter {
         }
       }
       await CookieManager.instance().deleteAllCookies();
-      await InAppWebViewController.clearAllCache();
+      if (!Platform.isWindows) {
+        await InAppWebViewController.clearAllCache();
+      }
     } catch (e) {
       WhatsappLogger.log(e);
     }
