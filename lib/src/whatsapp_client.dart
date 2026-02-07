@@ -16,6 +16,8 @@ class WhatsappClient {
   late final WppProfile profile;
   late final WppGroup group;
   late final WppConn conn;
+  late final WppStatus status;
+  late final WppLabels labels;
   late final WppEvents _wppEvents;
   late final WppAuth _wppAuth;
 
@@ -25,6 +27,8 @@ class WhatsappClient {
     profile = WppProfile(wpClient);
     group = WppGroup(wpClient);
     conn = WppConn(wpClient);
+    status = WppStatus(wpClient);
+    labels = WppLabels(wpClient);
     _wppAuth = WppAuth(wpClient);
     _wppEvents = WppEvents(wpClient);
     _wppEvents.init();

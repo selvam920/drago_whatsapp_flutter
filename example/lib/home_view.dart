@@ -92,6 +92,8 @@ class HomeView extends GetView<HomeController> {
                                         const MiddleFormView(),
                                         const SizedBox(height: 16),
                                         _buildActionsCard(),
+                                        const SizedBox(height: 16),
+                                        _buildAdvancedFeaturesCard(),
                                         const SizedBox(height: 24),
                                         _buildEventsSection(),
                                       ],
@@ -403,6 +405,61 @@ class HomeView extends GetView<HomeController> {
                 avatar: const Icon(Icons.chat_bubble, size: 16),
                 label: const Text("Get Chats"),
                 onPressed: () => controller.getChats(),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvancedFeaturesCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.star, size: 20, color: Colors.amber),
+              SizedBox(width: 8),
+              Text("Advanced Features",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _buildActionButton(
+                icon: Icons.edit_note,
+                label: "Edit Last Msg",
+                onPressed: controller.editLastMessage,
+                color: Colors.teal,
+              ),
+              _buildActionButton(
+                icon: Icons.push_pin,
+                label: "Pin Last Msg",
+                onPressed: controller.pinLastMessage,
+                color: Colors.blueGrey,
+              ),
+              _buildActionButton(
+                icon: Icons.history_edu,
+                label: "Post Status",
+                onPressed: controller.postStatus,
+                color: const Color(0xff075E54),
+              ),
+              _buildActionButton(
+                icon: Icons.label,
+                label: "List Labels",
+                onPressed: controller.listLabels,
+                color: Colors.indigo,
               ),
             ],
           ),

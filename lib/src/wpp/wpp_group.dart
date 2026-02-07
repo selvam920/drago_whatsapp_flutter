@@ -63,4 +63,36 @@ class WppGroup {
       methodName: "removeParticipants",
     );
   }
+
+  /// Assign admins to a group
+  Future promoteParticipants({
+    required String groupId,
+    required List<String> phoneNumbers,
+  }) async {
+    List<String> parseList = phoneNumbers.map((e) => e.phoneParse).toList();
+    return await wpClient.evaluateJs(
+      '''window.WPP.group.promoteParticipants(${groupId.groupParse}, $parseList);''',
+      methodName: "promoteParticipants",
+    );
+  }
+
+  /// Remove admins from a group
+  Future demoteParticipants({
+    required String groupId,
+    required List<String> phoneNumbers,
+  }) async {
+    List<String> parseList = phoneNumbers.map((e) => e.phoneParse).toList();
+    return await wpClient.evaluateJs(
+      '''window.WPP.group.demoteParticipants(${groupId.groupParse}, $parseList);''',
+      methodName: "demoteParticipants",
+    );
+  }
+
+  /// Leave a group
+  Future leave({required String groupId}) async {
+    return await wpClient.evaluateJs(
+      '''window.WPP.group.leave(${groupId.groupParse});''',
+      methodName: "leave",
+    );
+  }
 }

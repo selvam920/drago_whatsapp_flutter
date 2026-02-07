@@ -344,4 +344,36 @@ class WppChat {
           });''',
         methodName: "forwardMessage");
   }
+
+  /// Edit a message you sent
+  Future editMessage({
+    required MessageId messageId,
+    required String newMessage,
+  }) async {
+    return await wpClient.evaluateJs(
+      '''window.WPP.chat.editMessage(${messageId.serialized.jsParse}, ${newMessage.jsParse});''',
+      methodName: "editMessage",
+    );
+  }
+
+  /// Pin a message in a chat
+  Future pinMessage({
+    required MessageId messageId,
+    int? durationInSeconds,
+  }) async {
+    return await wpClient.evaluateJs(
+      '''window.WPP.chat.pinMsg(${messageId.serialized.jsParse}, {
+        duration: ${durationInSeconds ?? 86400}
+      });''',
+      methodName: "pinMessage",
+    );
+  }
+
+  /// Unpin a message in a chat
+  Future unpinMessage({required MessageId messageId}) async {
+    return await wpClient.evaluateJs(
+      '''window.WPP.chat.unpinMsg(${messageId.serialized.jsParse});''',
+      methodName: "unpinMessage",
+    );
+  }
 }

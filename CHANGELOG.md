@@ -33,3 +33,10 @@
 ## 0.1.0
 
 * improve the connectivity.
+
+## 0.1.1
+
+* **Performance**: Implemented "Fast Connect" logic with optimized script injection and module loading.
+* **UX**: Complete revamp of the example app with a modern dashboard, live console, and state tracking.
+* **Fixes**: Optimized initialization sequence and improved error handling for headless browsers.
+* **Docs**: Comprehensive update to README.md and example documentation.

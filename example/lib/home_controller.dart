@@ -226,10 +226,64 @@ class HomeController extends GetxController {
   Future<void> sendMessage() async {
     if (!formKey.currentState!.validate()) return;
     try {
-      await client?.chat.sendTextMessage(
+      final result = await client?.chat.sendTextMessage(
         phone: phoneNumber.text,
         message: message.text,
       );
+      Get.log("Send Result: $result");
+    } catch (e) {
+      Get.log("Error : $e");
+    }
+  }
+
+  Future<void> editLastMessage() async {
+    if (messageEvents.value?.id == null) {
+      Get.snackbar("Error", "No message to edit");
+      return;
+    }
+    try {
+      await client?.chat.editMessage(
+        messageId: messageEvents.value!.id!,
+        newMessage: "${message.text} (Edited)",
+      );
+      Get.snackbar("Success", "Message edited");
+    } catch (e) {
+      Get.log("Error : $e");
+    }
+  }
+
+  Future<void> pinLastMessage() async {
+    if (messageEvents.value?.id == null) {
+      Get.snackbar("Error", "No message to pin");
+      return;
+    }
+    try {
+      await client?.chat.pinMessage(messageId: messageEvents.value!.id!);
+      Get.snackbar("Success", "Message pinned for 24h");
+    } catch (e) {
+      Get.log("Error : $e");
+    }
+  }
+
+  Future<void> postStatus() async {
+    try {
+      await client?.status.sendTextStatus(
+        status: message.text,
+        backgroundColor: "#075E54",
+      );
+      Get.snackbar("Success", "Status updated");
+    } catch (e) {
+      Get.log("Error : $e");
+    }
+  }
+
+  Future<void> listLabels() async {
+    try {
+      final labels = await client?.labels.getAllLabels();
+      Get.dialog(AlertDialog(
+        title: const Text("Business Labels"),
+        content: Text(labels.toString()),
+      ));
     } catch (e) {
       Get.log("Error : $e");
     }
