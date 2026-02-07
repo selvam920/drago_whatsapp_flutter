@@ -1,15 +1,16 @@
 // ignore_for_file: unnecessary_overrides, avoid_print
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:drago_whatsapp_flutter/drago_whatsapp_flutter.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 
 class HomeController extends GetxController {
   var formKey = GlobalKey<FormState>();
@@ -24,10 +25,28 @@ class HomeController extends GetxController {
   /// reactive variables from Getx
   RxString error = "".obs;
   RxBool connected = false.obs;
+  RxBool connecting = false.obs;
   RxBool inApp = false.obs;
   Rx<ConnectionEvent?> connectionEvent = Rxn<ConnectionEvent>();
   Rx<Message?> messageEvents = Rxn<Message>();
   Rx<CallEvent?> callEvents = Rxn<CallEvent>();
+  RxList<String> logs = <String>[].obs;
+  RxString wppVersion = "latest".obs;
+
+  RxList<String> availableVersions = <String>["latest"].obs;
+
+  Rx<Duration> connectedDuration = Duration.zero.obs;
+  Timer? _durationTimer;
+
+  String get formatedDuration {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String minutes = twoDigits(connectedDuration.value.inMinutes.remainder(60));
+    String seconds = twoDigits(connectedDuration.value.inSeconds.remainder(60));
+    if (connectedDuration.value.inHours > 0) {
+      return "${twoDigits(connectedDuration.value.inHours)}:$minutes:$seconds";
+    }
+    return "$minutes:$seconds";
+  }
 
   // Get whatsapp client first to perform other Tasks
   WhatsappClient? client;
@@ -35,13 +54,36 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     WhatsappBotUtils.enableLogs(true);
-    if (GetPlatform.isWeb) {
-      WhatsappLogger.handleLogs = (log) {
+    _fetchWppVersions();
+    WhatsappLogger.handleLogs = (log) {
+      logs.add(log.toString());
+      if (logs.length > 100) logs.removeAt(0);
+      if (GetPlatform.isWeb || kDebugMode) {
         print(log.toString());
-      };
-    }
+      }
+    };
     message.text = "Testing Whatsapp Bot";
     super.onInit();
+  }
+
+  @override
+  void onClose() {
+    _stopDurationTimer();
+    super.onClose();
+  }
+
+  Future<void> _fetchWppVersions() async {
+    try {
+      final response = await http.get(Uri.parse(
+          "https://api.github.com/repos/wppconnect-team/wa-js/releases?per_page=10"));
+      if (response.statusCode == 200) {
+        final List releases = jsonDecode(response.body);
+        final versions = releases.map((r) => r['tag_name'].toString()).toList();
+        availableVersions.addAll(versions);
+      }
+    } catch (e) {
+      WhatsappLogger.log("Error fetching versions: $e");
+    }
   }
 
   void getAllGroups() => client?.group.getAllGroups();
@@ -49,19 +91,23 @@ class HomeController extends GetxController {
 
   void initConnection(
       {bool inAppBrowser = false, InAppWebViewController? controller}) async {
+    if (connecting.value || connected.value) return;
+    connecting.value = true;
     error.value = "";
-    connected.value = false;
+    String? version = wppVersion.value == "latest" ? null : wppVersion.value;
     try {
       if (inAppBrowser) {
         client = await DragoWhatsappFlutter.connectWithInAppBrowser(
           controller: controller!,
           onConnectionEvent: _onConnectionEvent,
+          wppVersion: version,
         );
       } else {
         client = await DragoWhatsappFlutter.connect(
           saveSession: true,
           onConnectionEvent: _onConnectionEvent,
           onQrCode: _onQrCode,
+          wppVersion: version,
         );
       }
 
@@ -71,6 +117,8 @@ class HomeController extends GetxController {
       }
     } catch (er) {
       error.value = er.toString();
+    } finally {
+      connecting.value = false;
     }
   }
 
@@ -78,7 +126,25 @@ class HomeController extends GetxController {
     connectionEvent(event);
     if (event == ConnectionEvent.connected) {
       _closeQrCodeDialog();
+      _startDurationTimer();
+    } else if (event == ConnectionEvent.logout ||
+        event == ConnectionEvent.waitingForQrScan) {
+      _stopDurationTimer();
     }
+  }
+
+  void _startDurationTimer() {
+    _durationTimer?.cancel();
+    connectedDuration.value = Duration.zero;
+    _durationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      connectedDuration.value += const Duration(seconds: 1);
+    });
+  }
+
+  void _stopDurationTimer() {
+    _durationTimer?.cancel();
+    _durationTimer = null;
+    connectedDuration.value = Duration.zero;
   }
 
   void _onQrCode(String qrCodeUrl, Uint8List? imageBytes) {
@@ -148,11 +214,13 @@ class HomeController extends GetxController {
   Future<void> disconnect() async {
     await client?.disconnect(tryLogout: true);
     connected.value = false;
+    _stopDurationTimer();
   }
 
   Future<void> clearSession() async {
     await client?.clearSession(tryLogout: true);
     connected.value = false;
+    _stopDurationTimer();
   }
 
   Future<void> sendMessage() async {

@@ -20,7 +20,7 @@ class WppChat {
     String? replyText = replyMessageId?.serialized;
     String? buttonsText = buttons?.map((e) => e.toJson()).toList().toString();
     return await wpClient.evaluateJs(
-        '''WPP.chat.sendTextMessage(${phone.phoneParse}, ${message.jsParse}, {
+        '''window.WPP.chat.sendTextMessage(${phone.phoneParse}, ${message.jsParse}, {
             quotedMsg: ${replyText.jsParse},
             useTemplateButtons: ${useTemplate.jsParse},
             buttons:$buttonsText,
@@ -67,7 +67,7 @@ class WppChat {
     String? buttonsText = buttons?.map((e) => e.toJson()).toList().toString();
 
     String source =
-        '''WPP.chat.sendFileMessage(${phone.phoneParse},${fileData.jsParse},{
+        '''window.WPP.chat.sendFileMessage(${phone.phoneParse},${fileData.jsParse},{
     type: ${fileTypeName.jsParse},
     isPtt: ${audioAsPtt.jsParse},
     isViewOnce: ${isViewOnce.jsParse},
@@ -91,7 +91,7 @@ class WppChat {
     required String contactName,
   }) async {
     return await wpClient
-        .evaluateJs('''WPP.chat.sendVCardContactMessage(${phone.phoneParse}, {
+        .evaluateJs('''window.WPP.chat.sendVCardContactMessage(${phone.phoneParse}, {
             id: ${contactPhone.phoneParse},
             name: ${contactName.jsParse}
           });''', methodName: "sendContactCard");
@@ -107,7 +107,7 @@ class WppChat {
     String? url,
   }) async {
     return await wpClient
-        .evaluateJs('''WPP.chat.sendLocationMessage(${phone.phoneParse}, {
+        .evaluateJs('''window.WPP.chat.sendLocationMessage(${phone.phoneParse}, {
               lat: ${lat.jsParse},
               lng: ${long.jsParse},
               name: ${name.jsParse},
@@ -121,7 +121,7 @@ class WppChat {
   ///archive = true to archive , and false to unarchive
   Future<void> archive({required String phone, bool archive = true}) async {
     return await wpClient.evaluateJs(
-      '''WPP.chat.archive(${phone.phoneParse}, $archive);''',
+      '''window.WPP.chat.archive(${phone.phoneParse}, $archive);''',
       methodName: "Archive",
     );
   }
@@ -129,7 +129,7 @@ class WppChat {
   /// check if the given Phone number is a valid phone number
   Future<bool> isValidContact({required String phone}) async {
     await wpClient.evaluateJs(
-      '''WPP.contact.queryExists(${phone.phoneParse});''',
+      '''window.WPP.contact.queryExists(${phone.phoneParse});''',
       methodName: "isValidContact",
     );
     // return true by default , it will crash on any issue
@@ -137,9 +137,12 @@ class WppChat {
   }
 
   /// to check if we [canMute] phone number
-  Future<bool> canMute({required String phone}) async =>
-      await wpClient.evaluateJs('''WPP.chat.canMute(${phone.phoneParse});''',
-          methodName: "CanMute");
+  Future<bool> canMute({required String phone}) async {
+    final result = await wpClient
+        .evaluateJs('''window.WPP.chat.canMute(${phone.phoneParse});''',
+            methodName: "CanMute");
+    return result == true || result?.toString() == "true";
+  }
 
   ///Mute a chat, you can use  expiration and use unix timestamp (seconds only)
   Future mute({
@@ -148,14 +151,14 @@ class WppChat {
   }) async {
     if (!await canMute(phone: phone)) throw "Cannot Mute $phone";
     return await wpClient.evaluateJs(
-        '''WPP.chat.mute(${phone.phoneParse},{expiration: $expirationUnixTimeStamp});''',
+        '''window.WPP.chat.mute(${phone.phoneParse},{expiration: $expirationUnixTimeStamp});''',
         methodName: "Mute");
   }
 
   /// Un mute chat
   Future unmute({required String phone}) async {
     return await wpClient.evaluateJs(
-        '''WPP.chat.unmute(${phone.phoneParse});''',
+        '''window.WPP.chat.unmute(${phone.phoneParse});''',
         methodName: "unmute");
   }
 
@@ -165,21 +168,21 @@ class WppChat {
     bool keepStarred = false,
   }) async =>
       await wpClient.evaluateJs(
-          '''WPP.chat.clear(${phone.phoneParse},$keepStarred);''',
+          '''window.WPP.chat.clear(${phone.phoneParse},$keepStarred);''',
           methodName: "ClearChat");
 
   /// [delete] chat
   Future delete({
     required String phone,
   }) async =>
-      await wpClient.evaluateJs('''WPP.chat.delete(${phone.phoneParse});''',
+      await wpClient.evaluateJs('''window.WPP.chat.delete(${phone.phoneParse});''',
           methodName: "DeleteChat");
 
   ///Get timestamp of last seen using [getLastSeen]
   /// return either a timestamp or 0 if last seen off
   Future<int?> getLastSeen({required String phone}) async {
     var lastSeen = await wpClient.evaluateJs(
-        '''WPP.chat.getLastSeen(${phone.phoneParse});''',
+        '''window.WPP.chat.getLastSeen(${phone.phoneParse});''',
         methodName: "GetLastSeen");
     if (lastSeen.runtimeType == bool) return lastSeen ? 1 : 0;
     if (lastSeen.runtimeType == int) return lastSeen;
@@ -192,7 +195,7 @@ class WppChat {
     bool onlyGroups = false,
   }) async {
     return await wpClient.evaluateJs(
-      '''WPP.chat.list({
+      '''window.WPP.chat.list({
             onlyUsers: ${onlyUser.jsParse},
             onlyGroups: ${onlyGroups.jsParse}
          });''',
@@ -204,14 +207,14 @@ class WppChat {
   ///Mark a chat as read and send SEEN event
   Future markAsSeen({required String phone}) async {
     return await wpClient.evaluateJs(
-      '''WPP.chat.markIsRead(${phone.phoneParse});''',
+      '''window.WPP.chat.markIsRead(${phone.phoneParse});''',
       methodName: "MarkIsRead",
     );
   }
 
   Future markIsComposing({required String phone, int timeout = 5000}) async {
     await wpClient.evaluateJs(
-      '''WPP.chat.markIsComposing(${phone.phoneParse});''',
+      '''window.WPP.chat.markIsComposing(${phone.phoneParse});''',
       methodName: "markIsComposing",
     );
 
@@ -220,14 +223,14 @@ class WppChat {
 
     // Mark the chat as paused.
     await wpClient.evaluateJs(
-      '''WPP.chat.markIsPaused(${phone.phoneParse});''',
+      '''window.WPP.chat.markIsPaused(${phone.phoneParse});''',
       methodName: "markIsPaused",
     );
   }
 
   Future markIsRecording({required String phone, int timeout = 5000}) async {
     await wpClient.evaluateJs(
-      '''WPP.chat.markIsRecording(${phone.phoneParse});''',
+      '''window.WPP.chat.markIsRecording(${phone.phoneParse});''',
       methodName: "markIsRecording",
     );
 
@@ -236,7 +239,7 @@ class WppChat {
 
     // Mark the chat as paused.
     await wpClient.evaluateJs(
-      '''WPP.chat.markIsPaused(${phone.phoneParse});''',
+      '''window.WPP.chat.markIsPaused(${phone.phoneParse});''',
       methodName: "markIsPaused",
     );
   }
@@ -244,7 +247,7 @@ class WppChat {
   ///Mark a chat as unread
   Future markAsUnread({required String phone}) async {
     return await wpClient.evaluateJs(
-      '''WPP.chat.markIsUnread(${phone.phoneParse});''',
+      '''window.WPP.chat.markIsUnread(${phone.phoneParse});''',
       methodName: "MarkIsUnread",
     );
   }
@@ -252,7 +255,7 @@ class WppChat {
   ///pin/unpin to chat
   Future pin({required String phone, bool pin = true}) async {
     return await wpClient.evaluateJs(
-      '''WPP.chat.pin(${phone.phoneParse},$pin);''',
+      '''window.WPP.chat.pin(${phone.phoneParse},$pin);''',
       methodName: "pin",
     );
   }
@@ -266,7 +269,7 @@ class WppChat {
     bool revoke = false,
   }) async {
     return await wpClient.evaluateJs(
-      '''WPP.chat.deleteMessage(${phone.phoneParse},${messageId.jsParse}, $deleteMediaInDevice, $revoke);''',
+      '''window.WPP.chat.deleteMessage(${phone.phoneParse},${messageId.jsParse}, $deleteMediaInDevice, $revoke);''',
       methodName: "deleteMessage",
     );
   }
@@ -277,7 +280,7 @@ class WppChat {
   }) async {
     String mediaSerialized = messageId.serialized;
     String? base64 = await wpClient.evaluateJs(
-      '''WPP.chat.downloadMedia(${mediaSerialized.jsParse}).then(WPP.util.blobToBase64);''',
+      '''window.WPP.chat.downloadMedia(${mediaSerialized.jsParse}).then(window.WPP.util.blobToBase64);''',
       methodName: "downloadMedia",
     );
     if (base64 == null) return null;
@@ -287,7 +290,7 @@ class WppChat {
   /// Fetch messages from a chat
   Future getMessages({required String phone, int count = -1}) async {
     return await wpClient.evaluateJs(
-      '''WPP.chat.getMessages(${phone.phoneParse},{count: $count,});''',
+      '''window.WPP.chat.getMessages(${phone.phoneParse},{count: $count,});''',
       methodName: "getMessages",
       forceJsonParseResult: true,
     );
@@ -299,7 +302,7 @@ class WppChat {
       required String pollName,
       required List<String> pollOptions}) async {
     return await wpClient.evaluateJs(
-      '''WPP.chat.sendCreatePollMessage(${phone.phoneParse},${pollName.jsParse},${pollOptions.jsParse});''',
+      '''window.WPP.chat.sendCreatePollMessage(${phone.phoneParse},${pollName.jsParse},${pollOptions.jsParse});''',
       methodName: "sendCreatePollMessage",
     );
   }
@@ -307,7 +310,7 @@ class WppChat {
   /// [rejectCall] will reject incoming call
   Future rejectCall({String? callId}) async {
     return await wpClient.evaluateJs(
-      '''WPP.call.rejectCall(${callId.jsParse});''',
+      '''window.WPP.call.rejectCall(${callId.jsParse});''',
       methodName: "RejectCallResult",
     );
   }
@@ -320,7 +323,7 @@ class WppChat {
   }) async {
     String? serialized = messageId.serialized;
     return await wpClient.evaluateJs(
-      '''WPP.chat.sendReactionToMessage(${serialized.jsParse}, ${emoji != null ? emoji.jsParse : false});''',
+      '''window.WPP.chat.sendReactionToMessage(${serialized.jsParse}, ${emoji != null ? emoji.jsParse : false});''',
       methodName: "sendReactionToMessage",
     );
   }
@@ -335,7 +338,7 @@ class WppChat {
   }) async {
     String? serialized = messageId.serialized;
     return await wpClient.evaluateJs(
-        '''WPP.chat.forwardMessage(${phone.phoneParse}, ${serialized.jsParse}, {
+        '''window.WPP.chat.forwardMessage(${phone.phoneParse}, ${serialized.jsParse}, {
             displayCaptionText: $displayCaptionText,
             multicast: $multicast,
           });''',

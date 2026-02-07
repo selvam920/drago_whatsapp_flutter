@@ -12,25 +12,23 @@ Future<void> waitForQrCodeScan({
 }) async {
   String? urlCode;
   int attempt = 0;
-  Completer completer = Completer();
-  bool closeLoop = false;
-
-  Timer timer = Timer(Duration(seconds: waitDurationSeconds), () async {
-    if (!completer.isCompleted) completer.complete();
-    closeLoop = true;
-  });
+  final startTime = DateTime.now();
 
   while (true) {
-    if (closeLoop) break;
-    bool connected = await WppAuth(wpClient).isAuthenticated();
-    if (connected) {
-      timer.cancel();
-      if (!completer.isCompleted) completer.complete();
+    if (DateTime.now().difference(startTime).inSeconds > waitDurationSeconds) {
+      throw const WhatsappException(
+        message: 'Timeout waiting for QR code scan',
+        exceptionType: WhatsappExceptionType.timeout,
+      );
+    }
+
+    final authenticated = await WppAuth(wpClient).isAuthenticated();
+    if (authenticated) {
       break;
     }
 
-    QrCodeImage? result = await wpClient.getQrCode();
-    String? code = result?.urlCode;
+    final result = await wpClient.getQrCode();
+    final code = result?.urlCode;
 
     if (result != null && code != null && code != urlCode) {
       urlCode = code;
@@ -38,8 +36,6 @@ Future<void> waitForQrCodeScan({
       WhatsappLogger.log('Waiting for QRCode Scan: Attempt $attempt');
       onCatchQR?.call(result, attempt);
     }
-    await Future.delayed(const Duration(milliseconds: 200));
+    await Future.delayed(const Duration(milliseconds: 500));
   }
-
-  await completer.future;
 }

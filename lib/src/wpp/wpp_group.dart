@@ -7,14 +7,14 @@ class WppGroup {
   /// To add participants to a group
   Future createGroup({required String groupName}) async {
     return await wpClient.evaluateJs('''
-        WPP.group.create(${groupName.jsParse} , []);
+        window.WPP.group.create(${groupName.jsParse} , []);
       ''', methodName: "createGroup");
   }
 
   /// To get participants of a group
   Future getParticipants({required String groupId}) async {
     return await wpClient.evaluateJs(
-      '''WPP.group.getParticipants(${groupId.groupParse});''',
+      '''window.WPP.group.getParticipants(${groupId.groupParse});''',
       methodName: "getParticipants",
       forceJsonParseResult: true,
     );
@@ -23,7 +23,7 @@ class WppGroup {
   /// To get all groups
   Future getAllGroups() async {
     return await wpClient.evaluateJs(
-      '''WPP.group.getAllGroups();''',
+      '''window.WPP.group.getAllGroups();''',
       methodName: "getAllGroups",
       forceJsonParseResult: true,
     );
@@ -35,7 +35,7 @@ class WppGroup {
     required String subject,
   }) async {
     return wpClient.evaluateJs(
-      '''WPP.group.setSubject(${groupId.groupParse}, ${subject.jsParse});''',
+      '''window.WPP.group.setSubject(${groupId.groupParse}, ${subject.jsParse});''',
       methodName: 'setSubject',
     );
   }
@@ -47,7 +47,7 @@ class WppGroup {
   }) async {
     List<String> parseList = phoneNumbers.map((e) => e.phoneParse).toList();
     return await wpClient.evaluateJs(
-      '''WPP.group.addParticipants(${groupId.groupParse},$parseList);''',
+      '''window.WPP.group.addParticipants(${groupId.groupParse},$parseList);''',
       methodName: "addParticipants",
     );
   }
@@ -59,7 +59,7 @@ class WppGroup {
   }) async {
     List<String> parseList = phoneNumbers.map((e) => e.phoneParse).toList();
     return await wpClient.evaluateJs(
-      '''WPP.group.removeParticipants(${groupId.groupParse}, $parseList);''',
+      '''window.WPP.group.removeParticipants(${groupId.groupParse}, $parseList);''',
       methodName: "removeParticipants",
     );
   }

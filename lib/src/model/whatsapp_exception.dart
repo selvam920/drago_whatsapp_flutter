@@ -6,13 +6,16 @@ enum WhatsappExceptionType {
   inValidContact,
   clientNotConnected,
   clientErrorException,
+  timeout,
+  loginFailed,
 }
 
 class WhatsappException implements Exception {
-  late String message;
-  late WhatsappExceptionType exceptionType;
-  String? details;
-  WhatsappException({
+  final String message;
+  final WhatsappExceptionType exceptionType;
+  final String? details;
+
+  const WhatsappException({
     this.message = "Something went wrong",
     this.exceptionType = WhatsappExceptionType.unknown,
     this.details,
@@ -20,6 +23,8 @@ class WhatsappException implements Exception {
 
   @override
   String toString() {
-    return "[ WhatsappException  type : $exceptionType , message : $message ]";
+    String out = "WhatsappException [$exceptionType]: $message";
+    if (details != null) out += " (Details: $details)";
+    return out;
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -18,13 +19,14 @@ class WhatsappFlutterClient implements WpClientInterface {
 
   @override
   Future injectJs(String content) async {
-    await evaluateJs(content);
-    await Future.delayed(const Duration(seconds: 2));
+    await evaluateJs(content, tryPromise: false);
   }
 
   @override
   Future<void> dispose() async {
     await headlessInAppWebView?.dispose();
+    controller = null;
+    headlessInAppWebView = null;
   }
 
   @override
@@ -35,142 +37,116 @@ class WhatsappFlutterClient implements WpClientInterface {
     bool forceJsonParseResult = false,
   }) async {
     if (!tryPromise) {
-      var result = await controller?.evaluateJavascript(source: source);
+      final result = await controller?.evaluateJavascript(source: source);
       if (methodName?.isNotEmpty == true) {
         WhatsappLogger.log("${methodName}_Result : $result");
       }
       return result;
     }
-    final String functionBody = """
-        var result = new Promise(async function (resolve, reject) {  
-          try{
-            var data = await $source;
-            resolve(data);
-          }catch(e){
-            reject(e)
-          }
-        });
-       return await result;  
-      """;
-    CallAsyncJavaScriptResult? result =
-        await controller?.callAsyncJavaScript(functionBody: functionBody);
-    if (methodName?.isNotEmpty == true) {
-      WhatsappLogger.log("${methodName}_Result : ${result?.value}");
-    }
-    String? error = result?.error;
-    if (error != null) {
-      WhatsappLogger.log("${methodName}_Result_Error : ${result?.error}");
-      throw error;
-    }
 
-    return result?.value;
+    final String functionBody = "return await $source;";
+
+    try {
+      final result = await controller?.callAsyncJavaScript(functionBody: functionBody);
+      final value = result?.value;
+      if (methodName?.isNotEmpty == true) {
+        WhatsappLogger.log("${methodName}_Result : $value");
+      }
+
+      if (result?.error != null) {
+        WhatsappLogger.log("${methodName}_Result_Error : ${result?.error}");
+        throw result!.error!;
+      }
+
+      if (value == "true" || value == true) return true;
+      if (value == "false" || value == false) return false;
+
+      return value;
+    } catch (e) {
+      WhatsappLogger.log("${methodName}_Exception : $e");
+      rethrow;
+    }
   }
 
   @override
   Future<QrCodeImage?> getQrCode() async {
     try {
       if (Platform.isWindows) {
-        if (await evaluateJs('''document.querySelector('canvas')''') == null) {
+        final hasCanvas = await evaluateJs(
+              "document.querySelector('canvas') != null",
+              tryPromise: false,
+            ) ==
+            true;
+        if (!hasCanvas) {
           await Future.delayed(const Duration(seconds: 5));
         }
-
-        var qrImage = await evaluateJs(
-          '''
-          function getQrImage()  {
-            try{
-              const selectorImg = document.querySelector('canvas');
-              const selectorUrl = selectorImg.closest('[data-ref]');
-              if (selectorImg != null && selectorUrl != null) {
-                return selectorImg.toDataURL();
-              }
-            }catch(e){
-             console.log(e);
-              return null;
-            }
-          }
-          getQrImage();
-        ''',
-          tryPromise: false,
-        );
-        var url = await evaluateJs(
-          '''
-          function getQrUrl()  {
-            try{
-              const selectorImg = document.querySelector('canvas');
-              const selectorUrl = selectorImg.closest('[data-ref]');
-              if (selectorImg != null && selectorUrl != null) {
-                return selectorUrl.getAttribute('data-ref');
-              }
-            }catch(e){
-             console.log(e);
-              return null;
-            }
-          }
-          getQrUrl();
-        ''',
-          tryPromise: false,
-        );
-        return QrCodeImage(base64Image: qrImage, urlCode: url);
-      } else {
-        var result = await evaluateJs(
-          '''
-          function getQr()  {
-            try{
-              const selectorImg = document.querySelector('canvas');
-              const selectorUrl = selectorImg.closest('[data-ref]');
-              if (selectorImg != null && selectorUrl != null) {
-                let data = {
-                  base64Image: selectorImg.toDataURL(),
-                  urlCode: selectorUrl.getAttribute('data-ref'),
-                };
-                console.log(data);
-                return data;
-              }
-            }catch(e){
-             console.log(e);
-              return null;
-            }
-          }
-          getQr();
-        ''',
-          tryPromise: false,
-        );
-        String? urlCode = result?['urlCode'];
-        String? base64Image = result?['base64Image'];
-        return QrCodeImage(base64Image: base64Image, urlCode: urlCode);
       }
+
+      final result = await evaluateJs(
+        '''
+        (function()  {
+          try {
+            const canvas = document.querySelector('canvas');
+            if (!canvas) return null;
+            const selectorUrl = canvas.closest('[data-ref]');
+            return {
+              'base64Image': canvas.toDataURL(),
+              'urlCode': selectorUrl ? selectorUrl.getAttribute('data-ref') : null,
+            };
+          } catch(e) {
+            return null;
+          }
+        })()
+        ''',
+        tryPromise: false,
+      );
+
+      if (result == null || result is! Map) return null;
+
+      return QrCodeImage(
+        base64Image: result['base64Image'],
+        urlCode: result['urlCode'],
+      );
     } catch (e) {
-      //WhatsappLogger.log("QrCodeFetchingError: $e");
+      WhatsappLogger.log("QrCodeFetchingError: $e");
+      return null;
+    }
+  }
+
+  @override
+  Future<Uint8List?> takeScreenshot() async {
+    try {
+      return await controller?.takeScreenshot();
+    } catch (e) {
+      WhatsappLogger.log("ScreenshotError: $e");
       return null;
     }
   }
 
   @override
   Future<void> on(String event, Function(dynamic) callback) async {
-    String callbackName = "callback_${event.replaceAll(".", "_")}";
+    final callbackName = "callback_${event.replaceAll(".", "_")}";
     await evaluateJs(
-      """window.$callbackName = (data) => window.flutter_inappwebview.callHandler('$callbackName',data);""",
+      "window.$callbackName = (data) => window.flutter_inappwebview.callHandler('$callbackName', data);",
       tryPromise: false,
     );
     controller?.addJavaScriptHandler(
       handlerName: callbackName,
-      callback: callback,
+      callback: (args) => callback(args.isNotEmpty ? args[0] : null),
     );
-    await controller?.evaluateJavascript(
-      source: '''
-            WPP.on('$event', (data) => {
-              window.$callbackName(data);
-            });
-        ''',
+    await evaluateJs(
+      "window.WPP.on('$event', (data) => window.$callbackName(data));",
+      tryPromise: false,
     );
   }
 
   @override
   Future<void> off(String event) async {
-    String callbackName = "callback_${event.replaceAll(".", "_")}";
+    final callbackName = "callback_${event.replaceAll(".", "_")}";
     controller?.removeJavaScriptHandler(handlerName: callbackName);
-    await controller?.evaluateJavascript(
-      source: '''WPP.removeAllListeners('$event');''',
+    await evaluateJs(
+      "window.WPP.removeAllListeners('$event');",
+      tryPromise: false,
     );
   }
 
@@ -180,9 +156,7 @@ class WhatsappFlutterClient implements WpClientInterface {
   ) async {
     try {
       await evaluateJs(
-        """
-          window.onCustomEvent = (eventName,data) => window.flutter_inappwebview.callHandler('onCustomEvent',{type:eventName,data:data});
-         """,
+        "window.onCustomEvent = (eventName, data) => window.flutter_inappwebview.callHandler('onCustomEvent', {type: eventName, data: data});",
         tryPromise: false,
       );
 
@@ -190,40 +164,42 @@ class WhatsappFlutterClient implements WpClientInterface {
       controller?.addJavaScriptHandler(
           handlerName: "onCustomEvent",
           callback: (arguments) {
-            var type = arguments[0]["type"];
-            var data = arguments[0]["data"];
+            if (arguments.isEmpty || arguments[0] is! Map) return;
+            final eventData = arguments[0] as Map;
+            final type = eventData["type"];
+            final data = eventData["data"];
             onNewEventFromListener.call(type.toString(), data);
           });
 
       // Add all listeners
-      await controller?.evaluateJavascript(
-        source: '''function initEvents() {
-            WPP.on('conn.authenticated', () => {
-              window.onCustomEvent("connectionEvent","authenticated");
+      await evaluateJs(
+        '''
+        (function() {
+            const events = [
+              'conn.authenticated',
+              'conn.logout',
+              'conn.auth_code_change',
+              'conn.main_loaded',
+              'conn.main_ready',
+              'conn.require_auth'
+            ];
+            events.forEach(event => {
+              window.WPP.on(event, () => {
+                window.onCustomEvent("connectionEvent", event.split('.').pop());
+              });
             });
-             WPP.on('conn.logout', () => {
-              window.onCustomEvent("connectionEvent","logout");
-            });
-            WPP.on('conn.auth_code_change', () => {
-              window.onCustomEvent("connectionEvent","auth_code_change");
-            });
-            WPP.on('conn.main_loaded', () => {
-              window.onCustomEvent("connectionEvent","main_loaded");
-            });
-            WPP.on('conn.main_ready', () => {
-              window.onCustomEvent("connectionEvent","main_ready");
-            });
-            WPP.on('conn.require_auth', () => {
-              window.onCustomEvent("connectionEvent","require_auth");
-            });
-        }
-        initEvents();
+        })()
         ''',
+        tryPromise: false,
       );
     } catch (e) {
-      // Ignore for now
-      WhatsappLogger.log(e);
+      WhatsappLogger.log("initializeEventListener_Error: $e");
     }
+  }
+
+  @override
+  Future<void> reload() async {
+    await controller?.reload();
   }
 
   @override

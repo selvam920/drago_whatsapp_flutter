@@ -8,7 +8,7 @@ class WppProfile {
   /// Get your current text status
   Future getMyStatus() async {
     return await wpClient.evaluateJs(
-      '''WPP.profile.getMyStatus();''',
+      '''window.WPP.profile.getMyStatus();''',
       methodName: "getMyStatus",
     );
   }
@@ -16,7 +16,7 @@ class WppProfile {
   /// Update your current text status
   Future setMyStatus({required String status}) async {
     return await wpClient.evaluateJs(
-      '''WPP.profile.setMyStatus(${status.jsParse});''',
+      '''window.WPP.profile.setMyStatus(${status.jsParse});''',
       methodName: "setMyStatus",
     );
   }
@@ -28,16 +28,17 @@ class WppProfile {
     String base64Image = base64Encode(imageBytes);
     String imageData = 'data:image/jpeg;base64,$base64Image';
     return await wpClient.evaluateJs(
-      '''WPP.profile.setMyProfilePicture("$imageData");''',
+      '''window.WPP.profile.setMyProfilePicture("$imageData");''',
       methodName: "getMyStatus",
     );
   }
 
   /// Return the current logged user is Business or not
   Future<bool> isBusiness() async {
-    return await wpClient.evaluateJs(
-      '''WPP.profile.isBusiness();''',
+    final result = await wpClient.evaluateJs(
+      '''window.WPP.profile.isBusiness();''',
       methodName: "isBusiness",
     );
+    return result == true || result?.toString() == "true";
   }
 }

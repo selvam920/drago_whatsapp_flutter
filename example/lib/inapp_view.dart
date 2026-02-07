@@ -40,7 +40,6 @@ class _InappViewPageState extends State<InappViewPage> {
           userAgent: WhatsAppMetadata.userAgent,
           javaScriptEnabled: true,
           incognito: false,
-          clearCache: false,
           cacheEnabled: true,
         ),
         onLoadStop: (controller, url) async {

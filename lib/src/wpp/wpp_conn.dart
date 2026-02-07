@@ -8,7 +8,7 @@ class WppConn {
   Future setAlive([bool value = true]) async {
     var aliveValue = value ? '' : false;
     return await wpClient.evaluateJs(
-      '''WPP.conn.setKeepAlive($aliveValue);''',
+      '''window.WPP.conn.setKeepAlive($aliveValue);''',
       methodName: "setAlive",
     );
   }
@@ -16,7 +16,7 @@ class WppConn {
   /// Check if whatsapp web is asking for update
   Future needsUpdate() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.needsUpdate();''',
+      '''window.WPP.conn.needsUpdate();''',
       methodName: "needsUpdate",
     );
   }
@@ -24,7 +24,7 @@ class WppConn {
   /// Check is online
   Future isOnline() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.isOnline();''',
+      '''window.WPP.conn.isOnline();''',
       methodName: "isOnline",
     );
   }
@@ -32,7 +32,7 @@ class WppConn {
   /// Return the current logged user ID with device id
   Future getMyDeviceId() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.getMyDeviceId();''',
+      '''window.WPP.conn.getMyDeviceId();''',
       methodName: "getMyDeviceId",
     );
   }
@@ -40,7 +40,7 @@ class WppConn {
   /// Return the current logged user ID without device id
   Future getMyUserId() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.getMyUserId();''',
+      '''window.WPP.conn.getMyUserId();''',
       methodName: "getMyUserId",
     );
   }
@@ -48,7 +48,7 @@ class WppConn {
   /// Set the online state to online
   Future markAvailable() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.markAvailable();''',
+      '''window.WPP.conn.markAvailable();''',
       methodName: "markAvailable",
     );
   }
@@ -56,7 +56,7 @@ class WppConn {
   /// Check is the current browser is logged before loading
   Future isRegistered() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.isRegistered();''',
+      '''window.WPP.conn.isRegistered();''',
       methodName: "isRegistered",
     );
   }
@@ -64,7 +64,7 @@ class WppConn {
   /// Check if multiDevice
   Future isMultiDevice() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.isMultiDevice();''',
+      '''window.WPP.conn.isMultiDevice();''',
       methodName: "isMultiDevice",
     );
   }
@@ -72,7 +72,7 @@ class WppConn {
   /// If it's true, WhatsApp WEB will switch to MD. If it's false, WhatsApp WEB will switch to Legacy.
   Future setMultiDevice(bool value) async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.setMultiDevice($value);''',
+      '''window.WPP.conn.setMultiDevice($value);''',
       methodName: "setMultiDevice",
     );
   }
@@ -80,7 +80,7 @@ class WppConn {
   /// To get auth Code
   Future getAuthCode() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.getAuthCode();''',
+      '''window.WPP.conn.getAuthCode();''',
       methodName: "getAuthCode",
     );
   }
@@ -88,7 +88,7 @@ class WppConn {
   /// Check if idle
   Future isIdle() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.isIdle();''',
+      '''window.WPP.conn.isIdle();''',
       methodName: "isIdle",
     );
   }
@@ -96,7 +96,7 @@ class WppConn {
   /// Check if main is initialized
   Future isMainInit() async {
     return await wpClient.evaluateJs(
-      '''WPP.conn.isMainInit();''',
+      '''window.WPP.conn.isMainInit();''',
       methodName: "isMainInit",
     );
   }

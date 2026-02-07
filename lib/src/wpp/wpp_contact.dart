@@ -9,7 +9,7 @@ class WppContact {
     required String phone,
   }) async {
     return await wpClient.evaluateJs(
-      '''WPP.contact.getProfilePictureUrl(${phone.phoneParse});''',
+      '''window.WPP.contact.getProfilePictureUrl(${phone.phoneParse});''',
       methodName: "getProfilePictureUrl",
     );
   }
@@ -19,7 +19,7 @@ class WppContact {
     required String phone,
   }) async {
     return await wpClient.evaluateJs(
-      '''WPP.contact.getStatus(${phone.phoneParse});''',
+      '''window.WPP.contact.getStatus(${phone.phoneParse});''',
       methodName: "getStatus",
     );
   }
@@ -27,7 +27,7 @@ class WppContact {
   /// Return to list of contacts
   Future getContacts() async {
     return await wpClient.evaluateJs(
-      '''WPP.contact.list();''',
+      '''window.WPP.contact.list();''',
       methodName: "getContacts",
       forceJsonParseResult: true,
     );

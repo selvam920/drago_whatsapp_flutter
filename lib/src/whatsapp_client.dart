@@ -8,16 +8,16 @@ import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 /// get [WhatsappClient] from `WhatsappBotFlutter.connect()`
 /// please do not try to create on your own
 class WhatsappClient {
-  WpClientInterface wpClient;
+  final WpClientInterface wpClient;
 
   // Wpp Classes
-  late WppChat chat;
-  late WppContact contact;
-  late WppProfile profile;
-  late WppGroup group;
-  late WppConn conn;
-  late WppEvents _wppEvents;
-  late WppAuth _wppAuth;
+  late final WppChat chat;
+  late final WppContact contact;
+  late final WppProfile profile;
+  late final WppGroup group;
+  late final WppConn conn;
+  late final WppEvents _wppEvents;
+  late final WppAuth _wppAuth;
 
   WhatsappClient({required this.wpClient}) {
     chat = WppChat(wpClient);

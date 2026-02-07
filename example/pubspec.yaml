@@ -41,6 +41,7 @@ dependencies:
   flutter_inappwebview: any
   drago_whatsapp_flutter:
     path: ..
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

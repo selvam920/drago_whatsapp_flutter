@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_client.dart';
@@ -7,6 +8,8 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter/foundation.dart';
 
 class DragoWhatsappFlutter {
+  /// [connect] will initialize the connection to Whatsapp Web
+  /// it will return [WhatsappClient] if connection is successful
   static Future<WhatsappClient?> connect({
     bool saveSession = false,
     String? sessionPath,
@@ -16,22 +19,33 @@ class DragoWhatsappFlutter {
     Duration? connectionTimeout = const Duration(seconds: 20),
     Function(HeadlessInAppWebView? headlessInAppWebView)? onWebViewCreated,
     String? wppVersion,
+    Map<String, dynamic>? wppConfig,
+    bool enableHttpOverrides = true,
   }) async {
     WpClientInterface? wpClient;
 
     try {
-      HttpOverrides.global = MyHttpOverrides();
+      if (enableHttpOverrides) {
+        HttpOverrides.global = MyHttpOverrides();
+      }
       onConnectionEvent?.call(ConnectionEvent.initializing);
 
-      wpClient =
-          await _getHeadLessInAppBrowser(saveSession, sessionPath: sessionPath);
+      wpClient = await _getHeadLessInAppBrowser(
+        saveSession,
+        sessionPath: sessionPath,
+        wppVersion: wppVersion,
+      );
       wpClient.sessionPath = sessionPath;
 
       if (wpClient is WhatsappFlutterClient) {
-        onWebViewCreated?.call(wpClient.headlessInAppWebView!);
+        onWebViewCreated?.call(wpClient.headlessInAppWebView);
       }
 
-      await WppConnect.init(wpClient, wppVersion: wppVersion);
+      await WppConnect.init(
+        wpClient,
+        wppVersion: wppVersion,
+        config: wppConfig,
+      );
 
       onConnectionEvent?.call(ConnectionEvent.waitingForLogin);
 
@@ -44,9 +58,9 @@ class DragoWhatsappFlutter {
 
       return WhatsappClient(wpClient: wpClient);
     } catch (e) {
-      WhatsappLogger.log(e.toString());
+      WhatsappLogger.log("Connect Error: $e");
       onWebViewCreated?.call(null);
-      wpClient?.dispose();
+      await wpClient?.dispose();
       rethrow;
     }
   }
@@ -58,6 +72,7 @@ class DragoWhatsappFlutter {
     Function(ConnectionEvent)? onConnectionEvent,
     Duration? connectionTimeout = const Duration(seconds: 20),
     String? wppVersion,
+    Map<String, dynamic>? wppConfig,
   }) async {
     WpClientInterface? wpClient;
 
@@ -67,7 +82,11 @@ class DragoWhatsappFlutter {
       wpClient = WhatsappInAppFlutterClient(controller: controller);
       wpClient.sessionPath =
           null; // InAppBrowser might not expose session path easily or it's handled by controller
-      await WppConnect.init(wpClient, wppVersion: wppVersion);
+      await WppConnect.init(
+        wpClient,
+        wppVersion: wppVersion,
+        config: wppConfig,
+      );
       await waitForLogin(
         wpClient,
         onConnectionEvent: onConnectionEvent,
@@ -85,16 +104,29 @@ class DragoWhatsappFlutter {
 
   /// to run webView in headless mode and connect with it
   static Future<WhatsappFlutterClient> _getHeadLessInAppBrowser(
-      bool keepSession,
-      {String? sessionPath}) async {
-    Completer<InAppWebViewController> completer = Completer();
+    bool keepSession, {
+    String? sessionPath,
+    String? wppVersion,
+  }) async {
+    final completer = Completer<InAppWebViewController>();
     PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
 
-    HeadlessInAppWebView headlessWebView = HeadlessInAppWebView(
+    if (!keepSession) {
+      await InAppWebViewController.clearAllCache();
+    }
+
+    String wppUrl;
+    if (wppVersion != null && wppVersion.isNotEmpty) {
+      wppUrl =
+          "https://github.com/wppconnect-team/wa-js/releases/download/$wppVersion/wppconnect-wa.js";
+    } else {
+      wppUrl =
+          "https://github.com/wppconnect-team/wa-js/releases/latest/download/wppconnect-wa.js";
+    }
+
+    final headlessWebView = HeadlessInAppWebView(
       initialUrlRequest: URLRequest(
-        url: WebUri.uri(
-          Uri.parse(WhatsAppMetadata.whatsAppURL),
-        ),
+        url: WebUri.uri(Uri.parse(WhatsAppMetadata.whatsAppURL)),
       ),
       onConsoleMessage: (controller, consoleMessage) {
         WhatsappLogger.log("ConsoleLog: ${consoleMessage.message}");
@@ -104,9 +136,21 @@ class DragoWhatsappFlutter {
           action: ServerTrustAuthResponseAction.PROCEED,
         );
       },
-      shouldOverrideUrlLoading: (controller, navigationAction) async {
-        return NavigationActionPolicy.ALLOW;
-      },
+      initialUserScripts: UnmodifiableListView([
+        UserScript(
+          source: '''
+            (function() {
+              var script = document.createElement('script');
+              script.src = "$wppUrl";
+              script.onload = function() {
+                console.log("WPP Script loaded via initialUserScript");
+              };
+              document.head.appendChild(script);
+            })();
+          ''',
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+        ),
+      ]),
       initialSettings: InAppWebViewSettings(
         isInspectable: kDebugMode,
         preferredContentMode: UserPreferredContentMode.DESKTOP,
@@ -114,46 +158,64 @@ class DragoWhatsappFlutter {
         javaScriptEnabled: true,
         appCachePath: sessionPath,
         incognito: !keepSession,
-        clearCache: !keepSession,
         cacheEnabled: keepSession,
       ),
       onLoadStop: (controller, url) async {
-        // check if whatsapp web redirected us to the wrong mobile version of whatsapp
-        if (!url.toString().contains("web.whatsapp.com")) {
+        final urlString = url.toString();
+        if (!urlString.contains("web.whatsapp.com")) {
           if (!completer.isCompleted) {
             completer.completeError(
-              "Failed to load WhatsappWeb in Webview Mobile, please try again or clear cache of application",
+              const WhatsappException(
+                message: "Failed to load WhatsappWeb: unexpected redirect",
+                exceptionType: WhatsappExceptionType.failedToConnect,
+                details: "Redirected to non-whatsapp URL",
+              ),
             );
           }
+          return;
         }
         if (!completer.isCompleted) {
           completer.complete(controller);
         }
       },
       onReceivedError: (controller, request, error) async {
-        if (!completer.isCompleted) completer.completeError(error.toString());
+        if (!completer.isCompleted) {
+          completer.completeError(
+            WhatsappException(
+              message: "WebView Error: ${error.description}",
+              exceptionType: WhatsappExceptionType.failedToConnect,
+              details: error.toString(),
+            ),
+          );
+        }
       },
-      onJsConfirm: (controller, jsConfirmRequest) async {
-        //print("JsConfirmRequest: ${jsConfirmRequest.message}");
-        return JsConfirmResponse(action: JsConfirmResponseAction.CONFIRM);
-      },
-      onJsAlert: (controller, jsAlertRequest) async {
-        //print("JsAlertRequest: ${jsAlertRequest.message}");
-        return JsAlertResponse(action: JsAlertResponseAction.CONFIRM);
-      },
-      onJsPrompt: (controller, jsPromptRequest) async {
-        //print("JsPromptRequest: ${jsPromptRequest.message}");
-        return JsPromptResponse(action: JsPromptResponseAction.CONFIRM);
-      },
+      onJsConfirm: (controller, jsConfirmRequest) async =>
+          JsConfirmResponse(action: JsConfirmResponseAction.CONFIRM),
+      onJsAlert: (controller, jsAlertRequest) async =>
+          JsAlertResponse(action: JsAlertResponseAction.CONFIRM),
+      onJsPrompt: (controller, jsPromptRequest) async =>
+          JsPromptResponse(action: JsPromptResponseAction.CONFIRM),
     );
 
     await headlessWebView.run();
-    InAppWebViewController controller = await completer.future;
 
-    return WhatsappFlutterClient(
-      controller: controller,
-      headlessInAppWebView: headlessWebView,
-    );
+    try {
+      final controller = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw const WhatsappException(
+          message: "WebView initialization timed out",
+          exceptionType: WhatsappExceptionType.failedToConnect,
+        ),
+      );
+
+      return WhatsappFlutterClient(
+        controller: controller,
+        headlessInAppWebView: headlessWebView,
+      );
+    } catch (e) {
+      await headlessWebView.dispose();
+      rethrow;
+    }
   }
 
   /// [clearSession] will delete the session data and cookies

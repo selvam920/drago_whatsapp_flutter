@@ -29,3 +29,7 @@
 ## 0.0.9
 
 * fixed clear cache issue.
+
+## 0.1.0
+
+* improve the connectivity.

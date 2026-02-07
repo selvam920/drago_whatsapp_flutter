@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:drago_whatsapp_flutter/src/model/export_models.dart';
 
 /// Interface for creating a Whatsapp Client
@@ -22,8 +24,12 @@ abstract class WpClientInterface {
 
   Future<QrCodeImage?> getQrCode();
 
+  Future<Uint8List?> takeScreenshot();
+
   Future<void> on(String event, Function(dynamic) callback);
 
   Future<void> off(String event);
+
+  Future<void> reload();
   String? sessionPath;
 }
