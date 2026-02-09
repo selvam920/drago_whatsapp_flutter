@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:io';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_client.dart';
@@ -113,15 +112,6 @@ class DragoWhatsappFlutter {
 
     if (!keepSession) {
       await InAppWebViewController.clearAllCache();
-    }
-
-    String wppUrl;
-    if (wppVersion != null && wppVersion.isNotEmpty) {
-      wppUrl =
-          "https://github.com/wppconnect-team/wa-js/releases/download/$wppVersion/wppconnect-wa.js";
-    } else {
-      wppUrl =
-          "https://github.com/wppconnect-team/wa-js/releases/latest/download/wppconnect-wa.js";
     }
 
     final headlessWebView = HeadlessInAppWebView(
