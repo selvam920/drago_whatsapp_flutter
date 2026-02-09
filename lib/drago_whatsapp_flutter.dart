@@ -136,21 +136,6 @@ class DragoWhatsappFlutter {
           action: ServerTrustAuthResponseAction.PROCEED,
         );
       },
-      initialUserScripts: UnmodifiableListView([
-        UserScript(
-          source: '''
-            (function() {
-              var script = document.createElement('script');
-              script.src = "$wppUrl";
-              script.onload = function() {
-                console.log("WPP Script loaded via initialUserScript");
-              };
-              document.head.appendChild(script);
-            })();
-          ''',
-          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
-        ),
-      ]),
       initialSettings: InAppWebViewSettings(
         isInspectable: kDebugMode,
         preferredContentMode: UserPreferredContentMode.DESKTOP,

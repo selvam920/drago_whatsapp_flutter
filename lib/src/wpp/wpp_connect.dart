@@ -27,14 +27,19 @@ class WppConnect {
     );
 
     if (isWppPresent != true && isWppPresent?.toString() != "true") {
-      WhatsappLogger.log("WPP not found, fetching and injecting...");
+      WhatsappLogger.log("WPP not found, fetching and injecting script content...");
       try {
         String content = wppJsContent ??
             await http
                 .read(Uri.parse(wppUrl))
                 .timeout(const Duration(seconds: 30));
+        
+        // Inject the library as a string
         await wpClient.injectJs(content);
-        WhatsappLogger.log("WPP script injected successfully");
+        WhatsappLogger.log("WPP script content injected, length: ${content.length}");
+        
+        // Give it a moment to parse and initialize
+        await Future.delayed(const Duration(seconds: 2));
       } catch (e) {
         throw WhatsappException(
           exceptionType: WhatsappExceptionType.failedToConnect,
@@ -81,9 +86,8 @@ class WppConnect {
     await wpClient.evaluateJs(
       '''
       if (typeof window.WPP !== 'undefined') {
-        window.WPP.config.waitChatModules = false;
         // Handle session takeover automatically
-        window.WPP.conn.on('takeover', () => {
+        window.WPP.on('conn.takeover', () => {
           console.log('Takeover detected, taking back control...');
           window.WPP.conn.takeover();
         });
@@ -113,27 +117,51 @@ class WppConnect {
     int count = 0;
     while (count < tryCount) {
       try {
-        // We check for both WPP presence and the isReady flag
-        // Plus we check if webpack has actually finished exporting modules
         var result = await wpClient.evaluateJs(
           '''
           (function() {
-            return typeof window.WPP !== 'undefined' && 
-                   window.WPP.isReady && 
-                   window.WPP.webpack && 
-                   window.WPP.webpack.isReady;
+            try {
+              return {
+                present: typeof window.WPP !== 'undefined',
+                isReady: typeof window.WPP !== 'undefined' && !!window.WPP.isReady,
+                webpackReady: typeof window.WPP !== 'undefined' && !!window.WPP.webpack && !!window.WPP.webpack.isReady,
+                // On some versions, isReady might be enough
+              };
+            } catch(e) {
+              return { error: e.toString() };
+            }
           })()
           ''',
           tryPromise: false,
         );
         
-        if (result == true || result?.toString() == "true") return true;
+        if (result is Map) {
+          bool present = result['present'] == true;
+          bool isReady = result['isReady'] == true;
+          bool webpackReady = result['webpackReady'] == true;
+
+          // Goal: Both must be true, but if isReady is true and webpack is missing,
+          // it might be a version that changed internals. 
+          // However, standard wa-js uses webpack.isReady.
+          if (present && (isReady || webpackReady)) {
+             // Second check: wait a bit more if webpackReady is false but isReady is true
+             if (isReady && !webpackReady && count < 5) {
+                // wait a bit more
+             } else {
+                return true;
+             }
+          }
+          
+          if (count % 5 == 0) {
+            WhatsappLogger.log("WPP Status: count=$count, present=$present, isReady=$isReady, webpackReady=$webpackReady");
+          }
+        } else {
+          if (count % 5 == 0) {
+             WhatsappLogger.log("WPP Status: result is not a map: $result");
+          }
+        }
       } catch (e) {
         // Ignore evaluation errors during boot
-      }
-      
-      if (count % 5 == 0) {
-        WhatsappLogger.log("Waiting for WPP modules (Webpack)... Retry: $count");
       }
       
       await Future.delayed(const Duration(seconds: 1));

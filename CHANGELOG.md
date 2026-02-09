@@ -40,3 +40,7 @@
 * **UX**: Complete revamp of the example app with a modern dashboard, live console, and state tracking.
 * **Fixes**: Optimized initialization sequence and improved error handling for headless browsers.
 * **Docs**: Comprehensive update to README.md and example documentation.
+
+## 0.1.2
+
+* Fix whatsapp connectivity issue

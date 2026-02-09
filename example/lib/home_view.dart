@@ -82,6 +82,8 @@ class HomeView extends GetView<HomeController> {
                       delegate: SliverChildListDelegate([
                         _buildConnectionSection(),
                         const SizedBox(height: 24),
+                        const MiddleFormView(),
+                        const SizedBox(height: 24),
                         Obx(() => AnimatedSwitcher(
                               duration: const Duration(milliseconds: 300),
                               child: controller.connected.value
@@ -89,8 +91,6 @@ class HomeView extends GetView<HomeController> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        const MiddleFormView(),
-                                        const SizedBox(height: 16),
                                         _buildActionsCard(),
                                         const SizedBox(height: 16),
                                         _buildAdvancedFeaturesCard(),
@@ -332,6 +332,24 @@ class HomeView extends GetView<HomeController> {
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey.shade500),
           ),
+          const SizedBox(height: 24),
+          Obx(() => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Text(
+                  "SELECTED WPP VERSION: ${controller.wppVersion.value}",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade600,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+              )),
         ],
       ),
     );
