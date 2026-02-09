@@ -20,6 +20,7 @@ class DragoWhatsappFlutter {
     String? wppVersion,
     Map<String, dynamic>? wppConfig,
     bool enableHttpOverrides = true,
+    bool skipQrScan = false,
   }) async {
     WpClientInterface? wpClient;
 
@@ -53,6 +54,7 @@ class DragoWhatsappFlutter {
         onConnectionEvent: onConnectionEvent,
         onQrCode: onQrCode,
         waitDurationSeconds: qrCodeWaitDurationSeconds,
+        skipQrScan: skipQrScan,
       );
 
       return WhatsappClient(wpClient: wpClient);
@@ -72,6 +74,7 @@ class DragoWhatsappFlutter {
     Duration? connectionTimeout = const Duration(seconds: 20),
     String? wppVersion,
     Map<String, dynamic>? wppConfig,
+    bool skipQrScan = false,
   }) async {
     WpClientInterface? wpClient;
 
@@ -91,6 +94,7 @@ class DragoWhatsappFlutter {
         onConnectionEvent: onConnectionEvent,
         onQrCode: onQrCode,
         waitDurationSeconds: qrCodeWaitDurationSeconds,
+        skipQrScan: skipQrScan,
       );
 
       return WhatsappClient(wpClient: wpClient);

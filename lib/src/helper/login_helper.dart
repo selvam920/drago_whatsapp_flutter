@@ -14,11 +14,20 @@ Future<void> waitForLogin(
   required Function(String qrCodeUrl, Uint8List? qrCodeImage)? onQrCode,
   int waitDurationSeconds = 60,
   Function(ConnectionEvent)? onConnectionEvent,
+  bool skipQrScan = false,
 }) async {
   WhatsappLogger.log('Checking authentication status...');
   final wppAuth = WppAuth(wpClient);
 
   bool authenticated = await wppAuth.isAuthenticated();
+
+  if (!authenticated && skipQrScan) {
+    WhatsappLogger.log('Authentication required but skipQrScan is true. Skipping...');
+    throw const WhatsappException(
+      message: 'Authentication required but skipQrScan is true',
+      exceptionType: WhatsappExceptionType.loginFailed,
+    );
+  }
 
   if (!authenticated) {
     onConnectionEvent?.call(ConnectionEvent.waitingForQrScan);
