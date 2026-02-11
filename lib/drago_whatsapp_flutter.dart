@@ -114,11 +114,23 @@ class DragoWhatsappFlutter {
     final completer = Completer<InAppWebViewController>();
     PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
 
-    if (!keepSession) {
+    if (!keepSession && !Platform.isWindows) {
       await InAppWebViewController.clearAllCache();
+    } 
+
+     WebViewEnvironment? environment;
+
+      if (keepSession && !kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+     final availableVersion = await WebViewEnvironment.getAvailableVersion();
+      assert(availableVersion != null,
+           'Failed to find an installed WebView2 runtime or non-stable Microsoft Edge installation.');
+      environment= await WebViewEnvironment.create(
+          settings: WebViewEnvironmentSettings(
+              userDataFolder: sessionPath));
     }
 
     final headlessWebView = HeadlessInAppWebView(
+      webViewEnvironment: environment,
       initialUrlRequest: URLRequest(
         url: WebUri.uri(Uri.parse(WhatsAppMetadata.whatsAppURL)),
       ),

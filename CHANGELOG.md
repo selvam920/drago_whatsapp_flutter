@@ -44,3 +44,7 @@
 ## 0.1.2
 
 * Fix whatsapp connectivity issue
+
+## 0.1.3
+
+* Fix windows sesstion path

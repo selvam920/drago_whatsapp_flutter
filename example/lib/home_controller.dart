@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 class HomeController extends GetxController {
   var formKey = GlobalKey<FormState>();
@@ -105,6 +106,7 @@ class HomeController extends GetxController {
       } else {
         client = await DragoWhatsappFlutter.connect(
           saveSession: true,
+          sessionPath: "${(await getApplicationDocumentsDirectory()).path}/wpp_session",
           onConnectionEvent: _onConnectionEvent,
           onQrCode: _onQrCode,
           wppVersion: version,
