@@ -48,3 +48,7 @@
 ## 0.1.3
 
 * Fix windows sesstion path
+
+## 0.1.4
+
+* skip Qr scan improvement

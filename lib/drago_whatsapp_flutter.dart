@@ -192,7 +192,7 @@ class DragoWhatsappFlutter {
 
     try {
       final controller = await completer.future.timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 120),
         onTimeout: () => throw const WhatsappException(
           message: "WebView initialization timed out",
           exceptionType: WhatsappExceptionType.failedToConnect,

@@ -31,5 +31,6 @@ abstract class WpClientInterface {
   Future<void> off(String event);
 
   Future<void> reload();
+  Future<void> loadUrl(String url);
   String? sessionPath;
 }

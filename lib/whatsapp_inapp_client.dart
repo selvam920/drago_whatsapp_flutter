@@ -200,6 +200,11 @@ class WhatsappInAppFlutterClient implements WpClientInterface {
   }
 
   @override
+  Future<void> loadUrl(String url) async {
+    await controller?.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+  }
+
+  @override
   bool isConnected() {
     return controller != null;
   }

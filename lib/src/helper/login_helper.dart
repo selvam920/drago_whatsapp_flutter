@@ -22,11 +22,9 @@ Future<void> waitForLogin(
   bool authenticated = await wppAuth.isAuthenticated();
 
   if (!authenticated && skipQrScan) {
-    WhatsappLogger.log('Authentication required but skipQrScan is true. Skipping...');
-    throw const WhatsappException(
-      message: 'Authentication required but skipQrScan is true',
-      exceptionType: WhatsappExceptionType.loginFailed,
-    );
+    WhatsappLogger.log('Authentication required but skipQrScan is true. Redirecting to google.com...');
+    await wpClient.loadUrl('https://www.google.com');
+    return;
   }
 
   if (!authenticated) {
