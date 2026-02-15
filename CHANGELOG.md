@@ -52,3 +52,7 @@
 ## 0.1.4
 
 * skip Qr scan improvement
+
+## 0.1.5
+
+* return proper events. 

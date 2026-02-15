@@ -76,8 +76,55 @@ class WppAuth {
   /// To Logout
   Future logout() async {
     try {
-      await wpClient.evaluateJs('''window.WPP.conn.logout();''');
+      await wpClient.evaluateJs(
+        '''
+        (async () => {
+          if (typeof window.WPP !== 'undefined' && window.WPP.conn) {
+             try {
+                await window.WPP.conn.logout();
+             } catch (e) {
+                console.error("WPP.conn.logout Error", e);
+             }
+          }
+          
+          // Emit logout event before clearing data and reloading
+          if (typeof window.onCustomEvent === 'function') {
+            window.onCustomEvent("connectionEvent", "${ConnectionEvent.logout.name}");
+          }
+
+          try {
+            window.localStorage.clear();
+            window.sessionStorage.clear();
+            
+            // Unregister service workers
+            if (navigator.serviceWorker) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (const registration of registrations) {
+                  await registration.unregister();
+                }
+            }
+
+            // Clear IndexedDB
+            if (window.indexedDB && window.indexedDB.databases) {
+                const dbs = await window.indexedDB.databases();
+                dbs.forEach(db => {
+                    if (db.name) window.indexedDB.deleteDatabase(db.name);
+                });
+            }
+          } catch (e) {}
+          location.reload();
+        })()
+        ''',
+        methodName: "logout",
+      );
     } catch (e) {
+      WhatsappLogger.log("Logout Error: $e");
+      try {
+        await wpClient.evaluateJs(
+          'window.localStorage.clear(); window.sessionStorage.clear(); location.reload();',
+          tryPromise: false,
+        );
+      } catch (_) {}
       throw "Logout Failed";
     }
   }

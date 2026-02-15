@@ -97,6 +97,14 @@ class WhatsappClient {
     try {
       if (isConnected && await _wppAuth.isAuthenticated()) {
         await _wppAuth.logout();
+
+        // Wait for logout state to be reflected
+        int attempts = 0;
+        while (attempts < 5 && isConnected) {
+          if (!(await _wppAuth.isAuthenticated())) break;
+          await Future.delayed(const Duration(milliseconds: 500));
+          attempts++;
+        }
       }
     } catch (e) {
       WhatsappLogger.log(e);

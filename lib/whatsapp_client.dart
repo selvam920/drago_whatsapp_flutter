@@ -176,16 +176,16 @@ class WhatsappFlutterClient implements WpClientInterface {
         '''
         (function() {
             const events = [
-              'conn.authenticated',
-              'conn.logout',
-              'conn.auth_code_change',
-              'conn.main_loaded',
-              'conn.main_ready',
-              'conn.require_auth'
+              '${WhatsappEvent.connauthenticated}',
+              '${WhatsappEvent.connlogout}',
+              '${WhatsappEvent.connauthcodechange}',
+              '${WhatsappEvent.connmainloaded}',
+              '${WhatsappEvent.connmainready}',
+              '${WhatsappEvent.connrequireauth}'
             ];
             events.forEach(event => {
               window.WPP.on(event, () => {
-                window.onCustomEvent("connectionEvent", event.split('.').pop());
+                window.onCustomEvent("connectionEvent", event);
               });
             });
         })()
