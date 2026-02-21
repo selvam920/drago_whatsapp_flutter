@@ -84,10 +84,16 @@ class WhatsappFlutterClient implements WpClientInterface {
 
       final result = await evaluateJs(
         '''
-        (function()  {
+        (async function()  {
           try {
             const canvas = document.querySelector('canvas');
             if (!canvas) return null;
+            
+            // Wait for canvas content if it's empty
+            if (canvas.width <= 1 || canvas.height <= 1) {
+               await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+
             const selectorUrl = canvas.closest('[data-ref]');
             return {
               'base64Image': canvas.toDataURL(),
@@ -98,7 +104,7 @@ class WhatsappFlutterClient implements WpClientInterface {
           }
         })()
         ''',
-        tryPromise: false,
+        tryPromise: true,
       );
 
       if (result == null || result is! Map) return null;
@@ -187,6 +193,22 @@ class WhatsappFlutterClient implements WpClientInterface {
               window.WPP.on(event, () => {
                 window.onCustomEvent("connectionEvent", event);
               });
+            });
+
+            // Specific listener for QRCode Change
+            window.WPP.on('${WhatsappEvent.connauthcodechange}', async () => {
+              try {
+                const canvas = document.querySelector('canvas');
+                if (!canvas) return;
+                const selectorUrl = canvas.closest('[data-ref]');
+                const result = {
+                  'base64Image': canvas.toDataURL(),
+                  'urlCode': selectorUrl ? selectorUrl.getAttribute('data-ref') : null,
+                };
+                window.onCustomEvent("qrCodeEvent", result);
+              } catch(e) {
+                 // ignore
+              }
             });
         })()
         ''',

@@ -21,7 +21,10 @@ class WhatsappClient {
   late final WppEvents _wppEvents;
   late final WppAuth _wppAuth;
 
-  WhatsappClient({required this.wpClient}) {
+  WhatsappClient({
+    required this.wpClient,
+    WppEvents? wppEvents,
+  }) {
     chat = WppChat(wpClient);
     contact = WppContact(wpClient);
     profile = WppProfile(wpClient);
@@ -30,8 +33,10 @@ class WhatsappClient {
     status = WppStatus(wpClient);
     labels = WppLabels(wpClient);
     _wppAuth = WppAuth(wpClient);
-    _wppEvents = WppEvents(wpClient);
-    _wppEvents.init();
+    _wppEvents = wppEvents ?? WppEvents(wpClient);
+    if (wppEvents == null) {
+      _wppEvents.init();
+    }
   }
 
   /// To list to any event from WPP
@@ -66,6 +71,10 @@ class WhatsappClient {
   /// [connectionEventStream] will give update of Connection Events
   Stream<ConnectionEvent> get connectionEventStream =>
       _wppEvents.connectionEventStreamController.stream;
+
+  /// [qrCodeStream] will give update of QrCode
+  Stream<QrCodeImage> get qrCodeStream =>
+      _wppEvents.qrCodeStreamController.stream;
 
   /// [disconnect] will close the browser instance and set values to null
   Future<void> disconnect({

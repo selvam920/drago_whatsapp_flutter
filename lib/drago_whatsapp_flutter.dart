@@ -47,6 +47,10 @@ class DragoWhatsappFlutter {
         config: wppConfig,
       );
 
+      // Initialize Events before waiting for login to capture early events
+      final wppEvents = WppEvents(wpClient);
+      await wppEvents.init();
+
       onConnectionEvent?.call(ConnectionEvent.waitingForLogin);
 
       await waitForLogin(
@@ -57,7 +61,10 @@ class DragoWhatsappFlutter {
         skipQrScan: skipQrScan,
       );
 
-      return WhatsappClient(wpClient: wpClient);
+      return WhatsappClient(
+        wpClient: wpClient,
+        wppEvents: wppEvents,
+      );
     } catch (e) {
       WhatsappLogger.log("Connect Error: $e");
       onWebViewCreated?.call(null);
@@ -89,6 +96,11 @@ class DragoWhatsappFlutter {
         wppVersion: wppVersion,
         config: wppConfig,
       );
+
+      // Initialize Events before waiting for login to capture early events
+      final wppEvents = WppEvents(wpClient);
+      await wppEvents.init();
+
       await waitForLogin(
         wpClient,
         onConnectionEvent: onConnectionEvent,
@@ -97,7 +109,10 @@ class DragoWhatsappFlutter {
         skipQrScan: skipQrScan,
       );
 
-      return WhatsappClient(wpClient: wpClient);
+      return WhatsappClient(
+        wpClient: wpClient,
+        wppEvents: wppEvents,
+      );
     } catch (e) {
       WhatsappLogger.log(e.toString());
       wpClient?.dispose();

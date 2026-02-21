@@ -31,35 +31,45 @@ Future<void> waitForLogin(
     onConnectionEvent?.call(ConnectionEvent.waitingForQrScan);
     WhatsappLogger.log('Waiting for QRCode Scan...');
 
+    final authCompleter = Completer<void>();
+    wpClient.on(WhatsappEvent.connauthenticated, (_) {
+      if (!authCompleter.isCompleted) authCompleter.complete();
+    });
+
     try {
-      await waitForQrCodeScan(
-        wpClient: wpClient,
-        onCatchQR: (QrCodeImage qrCodeImage, int attempt) {
-          if (qrCodeImage.base64Image != null && qrCodeImage.urlCode != null) {
-            Uint8List? imageBytes;
-            try {
-              final base64String = qrCodeImage.base64Image!
-                  .replaceFirst(RegExp(r'data:image\/[a-zA-Z]+;base64,'), "");
-              imageBytes = base64Decode(base64String);
-            } catch (e) {
-              WhatsappLogger.log("Error decoding QR image: $e");
+      await Future.any([
+        waitForQrCodeScan(
+          wpClient: wpClient,
+          onCatchQR: (QrCodeImage qrCodeImage, int attempt) {
+            if (qrCodeImage.base64Image != null && qrCodeImage.urlCode != null) {
+              Uint8List? imageBytes;
+              try {
+                final base64String = qrCodeImage.base64Image!.replaceFirst(
+                    RegExp(r'data:image\/[a-zA-Z]+;base64,'), "");
+                imageBytes = base64Decode(base64String);
+              } catch (e) {
+                WhatsappLogger.log("Error decoding QR image: $e");
+              }
+              onQrCode?.call(qrCodeImage.urlCode!, imageBytes);
             }
-            onQrCode?.call(qrCodeImage.urlCode!, imageBytes);
-          }
-        },
-        waitDurationSeconds: waitDurationSeconds,
-      );
+          },
+          waitDurationSeconds: waitDurationSeconds,
+        ),
+        authCompleter.future,
+      ]);
     } catch (e) {
       if (e is WhatsappException) rethrow;
       throw WhatsappException(
         message: "Error during QR scan: $e",
         exceptionType: WhatsappExceptionType.unknown,
       );
+    } finally {
+      wpClient.off(WhatsappEvent.connauthenticated);
     }
 
     WhatsappLogger.log('Checking login status after scan...');
-    // Give it a moment to process authentication
-    await Future.delayed(const Duration(seconds: 1));
+    // Small delay to let internal state settle
+    await Future.delayed(const Duration(milliseconds: 200));
     authenticated = await wppAuth.isAuthenticated();
 
     if (!authenticated) {
@@ -71,7 +81,7 @@ Future<void> waitForLogin(
   }
 
   onConnectionEvent?.call(ConnectionEvent.authenticated);
-  await Future.delayed(const Duration(milliseconds: 500));
+  await Future.delayed(const Duration(milliseconds: 200));
 
   WhatsappLogger.log('Waiting for connection to be ready...');
   onConnectionEvent?.call(ConnectionEvent.connecting);
@@ -91,64 +101,83 @@ Future<void> waitForLogin(
 
 Future<bool> waitForInChat(WpClientInterface wpClient) async {
   final wppAuth = WppAuth(wpClient);
+  final readyCompleter = Completer<bool>();
   var startTime = DateTime.now();
   int seconds = 0;
   bool reloaded = false;
 
-  while (seconds < 120) {
-    seconds = DateTime.now().difference(startTime).inSeconds;
-    try {
-      // Primary check: Is the main interface fully ready?
-      if (await wppAuth.isMainReady()) {
-        WhatsappLogger.log("Main identity ready (Full)");
-        return true;
+  // Listen for the ready event to complete immediately
+  wpClient.on(WhatsappEvent.connmainready, (_) {
+    if (!readyCompleter.isCompleted) readyCompleter.complete(true);
+  });
+
+  // Fast-track if already ready
+  if (await wppAuth.isMainReady()) {
+    wpClient.off(WhatsappEvent.connmainready);
+    return true;
+  }
+
+  try {
+    // Polling as a fallback and for status updates
+    Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (readyCompleter.isCompleted) {
+        timer.cancel();
+        return;
       }
 
-      // Secondary check: Is it simply loaded? 
-      // If synced is true, we can probably proceed faster
-      final isLoaded = await wppAuth.isMainLoaded();
-      final isSynced = await wppAuth.isSynced();
+      seconds = DateTime.now().difference(startTime).inSeconds;
 
-      if (isLoaded && (isSynced || seconds > 25)) {
-        WhatsappLogger.log(
-            "Main identity ready (Early via Loaded: $isLoaded, Synced: $isSynced)");
-        return true;
+      if (seconds >= 120) {
+        if (!readyCompleter.isCompleted) readyCompleter.complete(false);
+        timer.cancel();
+        return;
       }
 
-      // Recovery: If we are authenticated but stuck for > 60 seconds, try a single reload
-      if (seconds > 70 && !reloaded) {
-        WhatsappLogger.log(
-            "Connection seems stuck. Attempting a page reload for recovery...");
-        await wpClient.reload();
-        reloaded = true;
-        // Reset timer after reload to give it fresh time
-        startTime = DateTime.now();
-        // Wait for page to reload and re-initialize WPP
-        await Future.delayed(const Duration(seconds: 10));
-        await WppConnect.init(wpClient);
-        continue;
-      }
+      try {
+        if (await wppAuth.isMainReady()) {
+          if (!readyCompleter.isCompleted) readyCompleter.complete(true);
+          return;
+        }
 
-      if (seconds % 60 == 0 && seconds > 0) {
-        WhatsappLogger.log("Long wait usually means WhatsApp is syncing your chat history. Please ensure your phone is online.");
-      }
-
-      if (seconds % 10 == 0 && seconds > 0) {
-        final isAuth = await wppAuth.isAuthenticated();
         final isLoaded = await wppAuth.isMainLoaded();
         final isSynced = await wppAuth.isSynced();
-        if (!isAuth) {
-          WhatsappLogger.log("Authentication lost while waiting for main.");
-          return false;
-        }
-        WhatsappLogger.log("Waiting for main ready... (Auth: OK, Loaded: $isLoaded, Synced: $isSynced)");
-      }
-    } catch (e) {
-      WhatsappLogger.log("Error during connection loop: $e");
-    }
 
-    WhatsappLogger.log("Waiting for main ready... ($seconds/120s)");
-    await Future.delayed(const Duration(seconds: 2));
+        // If loaded and synced, or loaded and wait for a short period (10s instead of 25s)
+        if (isLoaded && (isSynced || seconds > 10)) {
+          WhatsappLogger.log(
+              "Main identity ready (Early via Loaded: $isLoaded, Synced: $isSynced)");
+          if (!readyCompleter.isCompleted) readyCompleter.complete(true);
+          return;
+        }
+
+        if (seconds > 70 && !reloaded) {
+          WhatsappLogger.log(
+              "Connection seems stuck. Attempting a page reload for recovery...");
+          await wpClient.reload();
+          reloaded = true;
+          // Reset timer after reload
+          startTime = DateTime.now();
+          await Future.delayed(const Duration(seconds: 5));
+          await WppConnect.init(wpClient);
+        }
+
+        if (seconds % 10 == 0) {
+          final isAuth = await wppAuth.isAuthenticated();
+          if (!isAuth) {
+            WhatsappLogger.log("Authentication lost while waiting for main.");
+            if (!readyCompleter.isCompleted) readyCompleter.complete(false);
+            return;
+          }
+          WhatsappLogger.log(
+              "Waiting for main ready... (Auth: OK, Loaded: $isLoaded, Synced: $isSynced, Time: $seconds/120s)");
+        }
+      } catch (e) {
+        // Silent error in loop
+      }
+    });
+
+    return await readyCompleter.future;
+  } finally {
+    wpClient.off(WhatsappEvent.connmainready);
   }
-  return false;
 }

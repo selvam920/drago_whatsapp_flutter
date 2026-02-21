@@ -8,7 +8,9 @@ class WppAuth {
   Future<bool> isAuthenticated() async {
     try {
       final result = await wpClient.evaluateJs(
-          '''typeof window.WPP !== 'undefined' && window.WPP.conn.isAuthenticated();''');
+        '''typeof window.WPP !== 'undefined' && window.WPP.conn.isAuthenticated();''',
+        tryPromise: false,
+      );
       return result == true || result?.toString() == "true";
     } catch (e) {
       WhatsappLogger.log(e.toString());
@@ -20,7 +22,9 @@ class WppAuth {
   Future<bool> isMainReady() async {
     try {
       final result = await wpClient.evaluateJs(
-          '''typeof window.WPP !== 'undefined' && window.WPP.conn.isMainReady();''');
+        '''typeof window.WPP !== 'undefined' && window.WPP.conn.isMainReady();''',
+        tryPromise: false,
+      );
       return result == true || result?.toString() == "true";
     } catch (e) {
       WhatsappLogger.log(e.toString());
@@ -65,9 +69,11 @@ class WppAuth {
   Future<bool> isSynced() async {
     try {
       final result = await wpClient.evaluateJs(
-          '''typeof window.WPP !== 'undefined' && 
+        '''typeof window.WPP !== 'undefined' && 
              typeof window.WPP.conn.isSynced === 'function' && 
-             window.WPP.conn.isSynced();''');
+             window.WPP.conn.isSynced();''',
+        tryPromise: false,
+      );
       return result == true || result?.toString() == "true";
     } catch (e) {
       return false;
@@ -111,7 +117,9 @@ class WppAuth {
                     if (db.name) window.indexedDB.deleteDatabase(db.name);
                 });
             }
-          } catch (e) {}
+          } catch (e) {
+            // ignore cleanup errors
+          }
           location.reload();
         })()
         ''',
@@ -124,7 +132,9 @@ class WppAuth {
           'window.localStorage.clear(); window.sessionStorage.clear(); location.reload();',
           tryPromise: false,
         );
-      } catch (_) {}
+      } catch (_) {
+        // ignore fallback errors
+      }
       throw "Logout Failed";
     }
   }

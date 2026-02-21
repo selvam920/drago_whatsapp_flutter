@@ -6,9 +6,9 @@ class WppChat {
   WppChat(this.wpClient);
 
   /// [sendMessage] may throw errors if passed an invalid contact
-  /// or if this method completed without any issue , then probably message sent successfully
+  /// returns [Message] object if sent successfully
   /// add `replyMessageId` to quote message
-  Future sendTextMessage({
+  Future<Message?> sendTextMessage({
     required String phone,
     required String message,
     String? templateTitle,
@@ -18,8 +18,10 @@ class WppChat {
     MessageId? replyMessageId,
   }) async {
     String? replyText = replyMessageId?.serialized;
-    String? buttonsText = buttons?.map((e) => e.toJson()).toList().toString();
-    return await wpClient.evaluateJs(
+    String? buttonsText = buttons != null
+        ? jsonEncode(buttons.map((e) => e.toJson()).toList())
+        : null;
+    var result = await wpClient.evaluateJs(
         '''window.WPP.chat.sendTextMessage(${phone.phoneParse}, ${message.jsParse}, {
             quotedMsg: ${replyText.jsParse},
             useTemplateButtons: ${useTemplate.jsParse},
@@ -28,13 +30,16 @@ class WppChat {
             footer: ${templateFooter.jsParse}
           });''',
         methodName: "sendTextMessage");
+
+    return Message.parse(result).firstOrNull;
   }
 
   ///send file messages using [sendFileMessage]
+  /// returns [Message] object if sent successfully
   /// make sure to send fileType , we can also pass optional mimeType
   /// `replyMessageId` will send a quote message to the given messageId
   /// add `caption` to attach a text with the file
-  Future sendFileMessage({
+  Future<Message?> sendFileMessage({
     required String phone,
     required WhatsappFileType fileType,
     required List<int> fileBytes,
@@ -64,7 +69,9 @@ class WppChat {
     }
 
     String? replyTextId = replyMessageId?.serialized;
-    String? buttonsText = buttons?.map((e) => e.toJson()).toList().toString();
+    String? buttonsText = buttons != null
+        ? jsonEncode(buttons.map((e) => e.toJson()).toList())
+        : null;
 
     String source =
         '''window.WPP.chat.sendFileMessage(${phone.phoneParse},${fileData.jsParse},{
@@ -82,23 +89,24 @@ class WppChat {
 
     var sendResult = await wpClient.evaluateJs(source);
     WhatsappLogger.log("SendResult : $sendResult");
-    return sendResult;
+    return Message.parse(sendResult).firstOrNull;
   }
 
-  Future sendContactCard({
+  Future<Message?> sendContactCard({
     required String phone,
     required String contactPhone,
     required String contactName,
   }) async {
-    return await wpClient
+    var result = await wpClient
         .evaluateJs('''window.WPP.chat.sendVCardContactMessage(${phone.phoneParse}, {
             id: ${contactPhone.phoneParse},
             name: ${contactName.jsParse}
           });''', methodName: "sendContactCard");
+    return Message.parse(result).firstOrNull;
   }
 
   ///send a locationMessage using [sendLocationMessage]
-  Future sendLocationMessage({
+  Future<Message?> sendLocationMessage({
     required String phone,
     required String lat,
     required String long,
@@ -106,7 +114,7 @@ class WppChat {
     String? address,
     String? url,
   }) async {
-    return await wpClient
+    var result = await wpClient
         .evaluateJs('''window.WPP.chat.sendLocationMessage(${phone.phoneParse}, {
               lat: ${lat.jsParse},
               lng: ${long.jsParse},
@@ -115,6 +123,7 @@ class WppChat {
               url: ${url.jsParse},
             });
             ''', methodName: "sendLocationMessage");
+    return Message.parse(result).firstOrNull;
   }
 
   ///Pass phone with correct format in [archive] , and
@@ -297,22 +306,24 @@ class WppChat {
   }
 
   /// Send a create poll message , Note: This only works for groups
-  Future sendCreatePollMessage(
+  Future<Message?> sendCreatePollMessage(
       {required String phone,
       required String pollName,
       required List<String> pollOptions}) async {
-    return await wpClient.evaluateJs(
+    var result = await wpClient.evaluateJs(
       '''window.WPP.chat.sendCreatePollMessage(${phone.phoneParse},${pollName.jsParse},${pollOptions.jsParse});''',
       methodName: "sendCreatePollMessage",
     );
+    return Message.parse(result).firstOrNull;
   }
 
   /// [rejectCall] will reject incoming call
-  Future rejectCall({String? callId}) async {
-    return await wpClient.evaluateJs(
+  Future<bool> rejectCall({String? callId}) async {
+    var result = await wpClient.evaluateJs(
       '''window.WPP.call.rejectCall(${callId.jsParse});''',
       methodName: "RejectCallResult",
     );
+    return result == true || result?.toString() == "true";
   }
 
   /// Emoji list: https://unicode.org/emoji/charts/full-emoji-list.html
@@ -330,30 +341,32 @@ class WppChat {
 
   /// [forwardTextMessage] may throw errors if passed an invalid contact
   /// or if this method completed without any issue , then probably message sent successfully
-  Future forwardTextMessage({
+  Future<Message?> forwardTextMessage({
     required String phone,
     required MessageId messageId,
     bool displayCaptionText = false,
     bool multicast = false,
   }) async {
     String? serialized = messageId.serialized;
-    return await wpClient.evaluateJs(
+    var result = await wpClient.evaluateJs(
         '''window.WPP.chat.forwardMessage(${phone.phoneParse}, ${serialized.jsParse}, {
             displayCaptionText: $displayCaptionText,
             multicast: $multicast,
           });''',
         methodName: "forwardMessage");
+    return Message.parse(result).firstOrNull;
   }
 
   /// Edit a message you sent
-  Future editMessage({
+  Future<Message?> editMessage({
     required MessageId messageId,
     required String newMessage,
   }) async {
-    return await wpClient.evaluateJs(
+    var result = await wpClient.evaluateJs(
       '''window.WPP.chat.editMessage(${messageId.serialized.jsParse}, ${newMessage.jsParse});''',
       methodName: "editMessage",
     );
+    return Message.parse(result).firstOrNull;
   }
 
   /// Pin a message in a chat

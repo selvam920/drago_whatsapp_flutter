@@ -81,6 +81,8 @@ class HomeView extends GetView<HomeController> {
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
                         _buildConnectionSection(),
+                        const SizedBox(height: 16),
+                        _buildQrCodeSection(),
                         const SizedBox(height: 24),
                         const MiddleFormView(),
                         const SizedBox(height: 24),
@@ -127,6 +129,89 @@ class HomeView extends GetView<HomeController> {
         ],
       ),
     );
+  }
+
+  Widget _buildQrCodeSection() {
+    return Obx(() {
+      if (controller.connected.value || controller.qrCodeImage.value == null) {
+        return const SizedBox();
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Authentication Required",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                )
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 200,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade100),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(
+                      controller.qrCodeImage.value!,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Scan with WhatsApp Mobile",
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xff00a884)),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        "1. Open WhatsApp on your phone\n2. Go to Linked Devices\n3. Tap on Link a Device",
+                        style: TextStyle(fontSize: 14, height: 1.6),
+                      ),
+                      const SizedBox(height: 20),
+                      LinearProgressIndicator(
+                        backgroundColor: Colors.grey.shade100,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xff00a884)),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Updating in real-time...",
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      );
+    });
   }
 
   Widget _buildConsoleHeader() {

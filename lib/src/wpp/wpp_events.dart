@@ -9,6 +9,10 @@ class WppEvents {
   final StreamController<ConnectionEvent> connectionEventStreamController =
       StreamController.broadcast();
 
+  // To get update of QrCode
+  final StreamController<QrCodeImage> qrCodeStreamController =
+      StreamController.broadcast();
+
   /// call init() once on a page
   /// to add eventListeners
   Future<void> init() async {
@@ -20,6 +24,20 @@ class WppEvents {
       case "connectionEvent":
         _onConnectionEvent(eventData);
         break;
+      case "qrCodeEvent":
+        _onQrCodeEvent(eventData);
+        break;
+    }
+  }
+
+  void _onQrCodeEvent(dynamic eventData) {
+    if (eventData is Map) {
+      WhatsappLogger.log("QR Code change detected.");
+      final qrCode = QrCodeImage(
+        base64Image: eventData['base64Image'],
+        urlCode: eventData['urlCode'],
+      );
+      qrCodeStreamController.add(qrCode);
     }
   }
 

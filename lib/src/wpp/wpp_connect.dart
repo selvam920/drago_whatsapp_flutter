@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 
 class WppConnect {
+  static String? _cachedWppJsContent;
+  static String? _cachedVersion;
+
   /// make sure to call [init] to Initialize Wpp
   static Future init(
     WpClientInterface wpClient, {
@@ -21,25 +24,43 @@ class WppConnect {
     }
 
     // Check if WPP is already present on the page (to avoid double injection)
+    // We only check for presence, not 'isReady' here, to skip injection correctly
     final isWppPresent = await wpClient.evaluateJs(
       '''typeof window.WPP !== 'undefined';''',
       tryPromise: false,
     );
 
     if (isWppPresent != true && isWppPresent?.toString() != "true") {
+      // Check if we are on the correct page before injection
+      final currentUrl = await wpClient.evaluateJs("window.location.href", tryPromise: false);
+      if (currentUrl != null && !currentUrl.toString().contains("web.whatsapp.com")) {
+        WhatsappLogger.log("Not on WhatsApp Web page ($currentUrl), loading ${WhatsAppMetadata.whatsAppURL}...");
+        await wpClient.loadUrl(WhatsAppMetadata.whatsAppURL);
+        // Wait for page load
+        await Future.delayed(const Duration(seconds: 5));
+      }
+
       WhatsappLogger.log("WPP not found, fetching and injecting script content...");
       try {
-        String content = wppJsContent ??
-            await http
+        String content;
+        if (wppJsContent != null) {
+          content = wppJsContent;
+        } else if (_cachedWppJsContent != null && _cachedVersion == (wppVersion ?? 'latest')) {
+          content = _cachedWppJsContent!;
+        } else {
+          content = await http
                 .read(Uri.parse(wppUrl))
                 .timeout(const Duration(seconds: 30));
+          _cachedWppJsContent = content;
+          _cachedVersion = wppVersion ?? 'latest';
+        }
         
         // Inject the library as a string
         await wpClient.injectJs(content);
         WhatsappLogger.log("WPP script content injected, length: ${content.length}");
         
         // Give it a moment to parse and initialize
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 1));
       } catch (e) {
         throw WhatsappException(
           exceptionType: WhatsappExceptionType.failedToConnect,

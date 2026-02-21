@@ -56,3 +56,7 @@
 ## 0.1.5
 
 * return proper events. 
+
+## 0.1.6
+
+* improved whatsapp connectivity. 

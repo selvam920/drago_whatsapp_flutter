@@ -35,22 +35,31 @@ class CallEvent {
 
   static List<CallEvent> parse(dynamic data) {
     if (data == null) return [];
-    if (data is List) {
-      return data.map((e) => CallEvent.fromJson(e)).toList();
-    } else if (data is Map<String, dynamic>) {
-      return [CallEvent.fromJson(data)];
+    try {
+      if (data is List) {
+        return data
+            .where((e) => e != null && e is Map)
+            .map((e) => CallEvent.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      } else if (data is Map) {
+        return [CallEvent.fromJson(Map<String, dynamic>.from(data))];
+      }
+    } catch (e) {
+      // ignore
     }
     return [];
   }
 
   factory CallEvent.fromJson(Map<String, dynamic> json) {
     return CallEvent(
-      id: json["id"] ?? "",
-      isGroup: json["isGroup"] ?? false,
-      isVideo: json["isVideo"] ?? false,
-      offerTime: json["offerTime"] ?? 0,
-      sender: json["sender"] ?? "",
-      peerJid: json["peerJid"] ?? "",
+      id: json["id"]?.toString() ?? "",
+      isGroup: json["isGroup"] == true || json["isGroup"]?.toString() == "true",
+      isVideo: json["isVideo"] == true || json["isVideo"]?.toString() == "true",
+      offerTime: json["offerTime"] is int
+          ? json["offerTime"]
+          : (int.tryParse(json["offerTime"]?.toString() ?? "0") ?? 0),
+      sender: json["sender"]?.toString() ?? "",
+      peerJid: json["peerJid"]?.toString() ?? "",
     );
   }
 

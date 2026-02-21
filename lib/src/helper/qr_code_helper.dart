@@ -14,28 +14,46 @@ Future<void> waitForQrCodeScan({
   int attempt = 0;
   final startTime = DateTime.now();
 
-  while (true) {
-    if (DateTime.now().difference(startTime).inSeconds > waitDurationSeconds) {
-      throw const WhatsappException(
-        message: 'Timeout waiting for QR code scan',
-        exceptionType: WhatsappExceptionType.timeout,
-      );
-    }
+  // Add a listener for QR code change to be more reactive
+  try {
+    wpClient.on(WhatsappEvent.connauthcodechange, (data) async {
+      final result = await wpClient.getQrCode();
+      if (result != null && result.urlCode != urlCode) {
+        urlCode = result.urlCode;
+        attempt++;
+        onCatchQR?.call(result, attempt);
+      }
+    });
+  } catch (e) {
+    WhatsappLogger.log("Failed to set QR code change listener: $e");
+  }
 
-    final authenticated = await WppAuth(wpClient).isAuthenticated();
-    if (authenticated) {
-      break;
-    }
+  try {
+    while (true) {
+      if (DateTime.now().difference(startTime).inSeconds > waitDurationSeconds) {
+        throw const WhatsappException(
+          message: 'Timeout waiting for QR code scan',
+          exceptionType: WhatsappExceptionType.timeout,
+        );
+      }
 
-    final result = await wpClient.getQrCode();
-    final code = result?.urlCode;
+      final authenticated = await WppAuth(wpClient).isAuthenticated();
+      if (authenticated) {
+        break;
+      }
 
-    if (result != null && code != null && code != urlCode) {
-      urlCode = code;
-      attempt++;
-      WhatsappLogger.log('Waiting for QRCode Scan: Attempt $attempt');
-      onCatchQR?.call(result, attempt);
+      final result = await wpClient.getQrCode();
+      final code = result?.urlCode;
+
+      if (result != null && code != null && code != urlCode) {
+        urlCode = code;
+        attempt++;
+        WhatsappLogger.log('Waiting for QRCode Scan: Attempt $attempt');
+        onCatchQR?.call(result, attempt);
+      }
+      await Future.delayed(const Duration(milliseconds: 1000));
     }
-    await Future.delayed(const Duration(milliseconds: 500));
+  } finally {
+    wpClient.off(WhatsappEvent.connauthcodechange);
   }
 }

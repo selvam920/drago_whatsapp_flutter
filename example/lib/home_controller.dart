@@ -34,6 +34,9 @@ class HomeController extends GetxController {
   RxList<String> logs = <String>[].obs;
   RxString wppVersion = "latest".obs;
 
+  Rx<Uint8List?> qrCodeImage = Rxn<Uint8List>();
+  RxString qrCodeUrl = "".obs;
+
   RxList<String> availableVersions = <String>["latest"].obs;
 
   Rx<Duration> connectedDuration = Duration.zero.obs;
@@ -95,6 +98,7 @@ class HomeController extends GetxController {
     if (connecting.value || connected.value) return;
     connecting.value = true;
     error.value = "";
+    qrCodeImage.value = null;
     String? version = wppVersion.value == "latest" ? null : wppVersion.value;
     try {
       if (inAppBrowser) {
@@ -127,7 +131,7 @@ class HomeController extends GetxController {
   void _onConnectionEvent(ConnectionEvent event) {
     connectionEvent(event);
     if (event == ConnectionEvent.connected) {
-      _closeQrCodeDialog();
+      qrCodeImage.value = null;
       _startDurationTimer();
     } else if (event == ConnectionEvent.logout ||
         event == ConnectionEvent.waitingForQrScan) {
@@ -151,29 +155,31 @@ class HomeController extends GetxController {
 
   void _onQrCode(String qrCodeUrl, Uint8List? imageBytes) {
     if (imageBytes != null) {
-      _closeQrCodeDialog();
-      _showQrCodeDialog(imageBytes);
+      this.qrCodeUrl.value = qrCodeUrl;
+      qrCodeImage.value = imageBytes;
+      logs.add("New QrCode Generated");
     }
-  }
-
-  void _closeQrCodeDialog() {
-    if (Get.isDialogOpen ?? false) {
-      Get.back();
-    }
-  }
-
-  void _showQrCodeDialog(Uint8List bytes) {
-    Get.defaultDialog(
-      title: "Scan QrCode",
-      content: Image.memory(bytes),
-      onCancel: () {},
-    );
   }
 
   void initListeners(WhatsappClient client) async {
     // listen to ConnectionEvent Stream
     client.connectionEventStream.listen((event) {
       connectionEvent.value = event;
+    });
+
+    // listen to QrCode Stream
+    client.qrCodeStream.listen((qr) {
+      if (qr.base64Image != null && qr.urlCode != null) {
+        try {
+          final base64String = qr.base64Image!
+              .replaceFirst(RegExp(r'data:image\/[a-zA-Z]+;base64,'), "");
+          qrCodeImage.value = base64Decode(base64String);
+          qrCodeUrl.value = qr.urlCode!;
+          logs.add("QR Code updated from stream");
+        } catch (e) {
+          WhatsappLogger.log("Error decoding QR image stream: $e");
+        }
+      }
     });
 
     // listen to MessageEvents
