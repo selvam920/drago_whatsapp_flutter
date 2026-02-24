@@ -60,3 +60,7 @@
 ## 0.1.6
 
 * improved whatsapp connectivity. 
+
+## 0.1.7
+
+* improved windows file send. 

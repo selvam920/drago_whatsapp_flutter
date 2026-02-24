@@ -97,30 +97,40 @@ extension JsParser on dynamic {
 /// [parsePhone] will try to convert phone number in required format
 String parsePhone(String phone) {
   String chatSuffix = "@c.us";
-  //String groupSuffix = "@g.us";
   String phoneNum = phone.replaceAll("+", "");
-  if (!phone.contains(".us")) {
-    phoneNum = "$phoneNum$chatSuffix";
+  // Already has a valid WA suffix — leave as-is
+  if (phoneNum.contains("@")) {
+    return phoneNum;
   }
-  return phoneNum;
+  return "$phoneNum$chatSuffix";
 }
 
 /// [parseGroup] will try to convert group number in required format
 String parseGroup(String phone) {
   String groupSuffix = "@g.us";
   String phoneNum = phone.replaceAll("+", "");
-  if (!phone.contains(".us")) {
-    phoneNum = "$phoneNum$groupSuffix";
+  // Already has a valid WA suffix — leave as-is
+  if (phoneNum.contains("@")) {
+    return phoneNum;
   }
-  return phoneNum;
+  return "$phoneNum$groupSuffix";
 }
 
-/// [getMimeType] returns default mimeType
+/// [getMimeType] returns the MIME type for the given file.
+/// Tries to detect from [fileName] first using the `mime` package,
+/// then falls back to defaults based on [fileType].
 String getMimeType(
   WhatsappFileType fileType,
   String? fileName,
   List<int> bytes,
 ) {
+  // Try to detect MIME type from the actual file name/extension first
+  if (fileName != null) {
+    String? detected = lookupMimeType(fileName, headerBytes: bytes);
+    if (detected != null) return detected;
+  }
+
+  // Fall back to defaults based on the declared file type
   switch (fileType) {
     case WhatsappFileType.document:
       return "application/msword";
@@ -133,13 +143,7 @@ String getMimeType(
     case WhatsappFileType.video:
       return "video/mp4";
     case WhatsappFileType.unknown:
-      String? mimeType;
-      if (fileName != null) {
-        mimeType = lookupMimeType(fileName, headerBytes: bytes);
-      }
-      return mimeType ?? "application/octet-stream";
-    // case WhatsappFileType.video:
-    //   return "video/mp4";
+      return "application/octet-stream";
   }
 }
 

@@ -1,5 +1,6 @@
 enum WhatsappExceptionType {
   failedToConnect,
+  failedToSend,
   unknown,
   connectionFailed,
   unAuthorized,

@@ -39,6 +39,10 @@ class WppChat {
   /// make sure to send fileType , we can also pass optional mimeType
   /// `replyMessageId` will send a quote message to the given messageId
   /// add `caption` to attach a text with the file
+  ///
+  /// On Windows WebView2, this method bypasses WPP.chat.sendFileMessage
+  /// and uses low-level WPP internals because the high-level API has
+  /// an internal Promise that hangs due to chat.msgs.on('add') never firing.
   Future<Message?> sendFileMessage({
     required String phone,
     required WhatsappFileType fileType,
@@ -53,19 +57,34 @@ class WppChat {
     bool isViewOnce = false,
     bool audioAsPtt = false,
     List<MessageButtons>? buttons,
+    Duration timeout = const Duration(seconds: 120),
   }) async {
     String base64Image = base64Encode(fileBytes);
     String mimeType = mimetype ?? getMimeType(fileType, fileName, fileBytes);
-    String fileData = "data:$mimeType;base64,$base64Image";
 
-    String fileTypeName = "image";
-    if (mimeType.split("/").length > 1) {
-      fileTypeName = mimeType.split("/").first;
-    }
+    final fileSizeKB = (fileBytes.length / 1024).toStringAsFixed(1);
+    WhatsappLogger.log(
+      "sendFileMessage: fileName=$fileName, fileSize=${fileSizeKB}KB, "
+      "mimeType=$mimeType, type=$fileType",
+    );
 
-    // Check for video file type
-    if (fileTypeName == "video") {
-      fileTypeName = "video"; // Set the correct file type for videos
+    // Map MIME type prefix to WPP-compatible file type.
+    // WPP expects: "image", "audio", "video", or "document".
+    String mimePrefix = mimeType.split("/").first;
+    String fileTypeName;
+    switch (mimePrefix) {
+      case "image":
+        fileTypeName = "image";
+        break;
+      case "audio":
+        fileTypeName = "audio";
+        break;
+      case "video":
+        fileTypeName = "video";
+        break;
+      default:
+        fileTypeName = "document";
+        break;
     }
 
     String? replyTextId = replyMessageId?.serialized;
@@ -73,23 +92,275 @@ class WppChat {
         ? jsonEncode(buttons.map((e) => e.toJson()).toList())
         : null;
 
-    String source =
-        '''window.WPP.chat.sendFileMessage(${phone.phoneParse},${fileData.jsParse},{
-    type: ${fileTypeName.jsParse},
-    isPtt: ${audioAsPtt.jsParse},
-    isViewOnce: ${isViewOnce.jsParse},
-    filename: ${fileName.jsParse},
-    caption: ${caption.jsParse},
-    quotedMsg: ${replyTextId.jsParse},
-    useTemplateButtons: ${useTemplate.jsParse},
-    buttons:$buttonsText,
-    title: ${templateTitle.jsParse},
-    footer: ${templateFooter.jsParse}
-  });''';
+    // For large files, skip building the full data URI string in JS entirely.
+    // Instead, send raw base64 chunks and decode each to binary immediately.
+    // This avoids O(n²) string concatenation and reduces memory pressure.
+    final blobKey = '__wpp_file_blob_${DateTime.now().millisecondsSinceEpoch}';
+    const int chunkSize = 2 * 1024 * 1024; // 2MB chunks (base64 chars)
+    // Ensure chunks align to 4-char base64 boundaries for valid atob()
+    const int alignedChunkSize = (chunkSize ~/ 4) * 4;
 
-    var sendResult = await wpClient.evaluateJs(source);
-    WhatsappLogger.log("SendResult : $sendResult");
-    return Message.parse(sendResult).firstOrNull;
+    if (base64Image.length > alignedChunkSize) {
+      final numChunks = (base64Image.length / alignedChunkSize).ceil();
+      WhatsappLogger.log(
+        "sendFileMessage: large file, injecting in $numChunks chunks",
+      );
+
+      // Initialize a byte array collector in JS
+      await wpClient.evaluateJs(
+        'window.__wpp_byte_chunks = [];',
+        tryPromise: false,
+      );
+
+      // Send each base64 chunk → decode to Uint8Array immediately
+      for (int i = 0; i < base64Image.length; i += alignedChunkSize) {
+        final end = (i + alignedChunkSize > base64Image.length)
+            ? base64Image.length
+            : i + alignedChunkSize;
+        final chunk = base64Image.substring(i, end);
+        await wpClient.evaluateJs(
+          '''(function() {
+            var b64 = ${chunk.jsParse};
+            var raw = atob(b64);
+            var arr = new Uint8Array(raw.length);
+            for (var j = 0; j < raw.length; j++) arr[j] = raw.charCodeAt(j);
+            window.__wpp_byte_chunks.push(arr);
+          })();''',
+          tryPromise: false,
+        );
+      }
+
+      WhatsappLogger.log("sendFileMessage: chunks injected, building File");
+
+      // Build the final File from all binary chunks
+      await wpClient.evaluateJs(
+        '''(function() {
+          var blob = new Blob(window.__wpp_byte_chunks, {type: ${mimeType.jsParse}});
+          var fname = ${fileName.jsParse} || 'file';
+          window['$blobKey'] = new File([blob], fname, {type: ${mimeType.jsParse}});
+          delete window.__wpp_byte_chunks;
+        })();''',
+        tryPromise: false,
+      );
+    } else {
+      // Small file: inject as data URI and convert in one shot
+      String fileData = "data:$mimeType;base64,$base64Image";
+      await wpClient.evaluateJs(
+        '''(function() {
+          var dataUri = ${fileData.jsParse};
+          var parts = dataUri.split(',');
+          var mime = parts[0].match(/:(.*?);/)[1];
+          var b64 = parts[1];
+          var byteChars = atob(b64);
+          var byteArrays = [];
+          for (var offset = 0; offset < byteChars.length; offset += 8192) {
+            var slice = byteChars.slice(offset, offset + 8192);
+            var byteNumbers = new Array(slice.length);
+            for (var i = 0; i < slice.length; i++) {
+              byteNumbers[i] = slice.charCodeAt(i);
+            }
+            byteArrays.push(new Uint8Array(byteNumbers));
+          }
+          var blob = new Blob(byteArrays, {type: mime});
+          var fname = ${fileName.jsParse} || 'file';
+          window['$blobKey'] = new File([blob], fname, {type: mime});
+        })();''',
+        tryPromise: false,
+      );
+    }
+
+    WhatsappLogger.log("sendFileMessage: Blob created, sending...");
+
+    // Bypass WPP.chat.sendFileMessage and use low-level WPP internals.
+    // The high-level API hangs because chat.msgs.on('add') never fires
+    // on some Windows WebView2 setups. Instead we call the WPP internals
+    // directly and poll for the sent message.
+    final resultKey =
+        '__wpp_send_result_${DateTime.now().millisecondsSinceEpoch}';
+    final jsTimeoutMs = timeout.inMilliseconds;
+
+    String wrappedSource = '''(function() {
+      window['$resultKey'] = null;
+
+      (async function() {
+        try {
+          var fileObj = window['$blobKey'];
+          var chat = await window.WPP.chat.find(${phone.phoneParse});
+          if (!chat) throw new Error('Chat not found');
+
+          // Snapshot current message count
+          var msgCountBefore = chat.msgs ? chat.msgs.length : 0;
+
+          var opaqueData = await window.WPP.whatsapp.OpaqueData.createFromData(fileObj, fileObj.type);
+
+          var rawMediaOptions = {};
+          var fileTypeName = ${fileTypeName.jsParse};
+          if (fileTypeName === 'document') rawMediaOptions.asDocument = true;
+          else if (fileTypeName === 'audio') rawMediaOptions.isPtt = ${audioAsPtt.jsParse};
+          else if (fileTypeName === 'image') rawMediaOptions.maxDimension = 1600;
+
+          var mediaPrep = window.WPP.whatsapp.MediaPrep.prepRawMedia(opaqueData, rawMediaOptions);
+          await mediaPrep.waitForPrep();
+
+          // Build send options
+          var captionText = ${caption.jsParse} || fileObj.name;
+          var sendOptions = {
+            caption: captionText,
+            filename: fileObj.name,
+            footer: ${templateFooter.jsParse} || undefined,
+            quotedMsg: ${replyTextId.jsParse} || undefined,
+            isCaptionByUser: ${caption.jsParse} != null,
+            type: fileTypeName,
+            isViewOnce: ${isViewOnce.jsParse} || undefined,
+            useTemplateButtons: ${useTemplate.jsParse},
+            buttons: $buttonsText,
+            title: ${templateTitle.jsParse} || undefined,
+            addEvenWhilePreparing: false
+          };
+
+          var sendResultPromise;
+          if (mediaPrep.sendToChat.length === 1) {
+            sendResultPromise = mediaPrep.sendToChat({ chat: chat, options: sendOptions });
+          } else {
+            sendResultPromise = mediaPrep.sendToChat(chat, sendOptions);
+          }
+
+          // Poll for the new outgoing message (replaces broken on('add') listener)
+          var pollStart = Date.now();
+          var maxPollMs = $jsTimeoutMs;
+          var sentMsg = null;
+
+          // Helper: find the latest outgoing media message in chat
+          function findSentMsg() {
+            if (!chat.msgs || chat.msgs.length <= msgCountBefore) return null;
+            var models = chat.msgs.models || chat.msgs._models || [];
+            for (var i = models.length - 1; i >= Math.max(0, models.length - 10); i--) {
+              var m = models[i];
+              if (m && m.id && m.id.fromMe && m.t && (m.t * 1000) > (pollStart - 5000)) {
+                var mType = m.type || '';
+                if (mType === 'image' || mType === 'ptt' || mType === 'audio' ||
+                    mType === 'video' || mType === 'document' || mType === 'sticker') {
+                  return m;
+                }
+              }
+            }
+            return null;
+          }
+
+          function buildMsgResult(m) {
+            var msgId = m.id;
+            return {
+              id: msgId ? {fromMe: msgId.fromMe, remote: msgId.remote ? msgId.remote.toString() : '', id: msgId.id, _serialized: msgId._serialized || msgId.toString()} : null,
+              ack: m.ack,
+              from: m.from ? m.from.toString() : '',
+              to: m.to ? m.to.toString() : '',
+              sendMsgResult: {messageSendResult: 'OK'}
+            };
+          }
+
+          while (Date.now() - pollStart < maxPollMs) {
+            await new Promise(function(r) { setTimeout(r, 1500); });
+            try {
+              var raceResult = await Promise.race([
+                sendResultPromise,
+                new Promise(function(r) { setTimeout(function() { r('__still_pending__'); }, 200); })
+              ]);
+              if (raceResult !== '__still_pending__') {
+                // Look up the actual message from chat.msgs for full details.
+                await new Promise(function(r) { setTimeout(r, 500); });
+                var resolvedMsg = findSentMsg();
+                if (resolvedMsg) {
+                  window['$resultKey'] = JSON.stringify({ok: true, data: buildMsgResult(resolvedMsg)});
+                } else {
+                  window['$resultKey'] = JSON.stringify({ok: true, data: raceResult});
+                }
+                return;
+              }
+            } catch(sendErr) {
+              // sendResult rejected, continue polling
+            }
+
+            // Check for new fromMe messages in chat
+            sentMsg = findSentMsg();
+            if (sentMsg) {
+              break;
+            }
+          }
+
+          if (sentMsg) {
+            window['$resultKey'] = JSON.stringify({ok: true, data: buildMsgResult(sentMsg)});
+          } else {
+            window['$resultKey'] = JSON.stringify({ok: false, error: 'sendFileMessage: message not confirmed within timeout'});
+          }
+
+        } catch(err) {
+          window['$resultKey'] = JSON.stringify({ok: false, error: err ? (err.message || String(err)) : 'Unknown error'});
+        }
+      })();
+    })();''';
+
+    await wpClient.evaluateJs(wrappedSource, tryPromise: false);
+    WhatsappLogger.log("sendFileMessage: send started, polling for result...");
+
+    // Poll Dart-side for the JS result
+    final stopwatch = Stopwatch()..start();
+    int pollCount = 0;
+
+    try {
+      while (stopwatch.elapsed < timeout + const Duration(seconds: 10)) {
+        final interval = pollCount < 10
+            ? const Duration(seconds: 1)
+            : const Duration(seconds: 3);
+        await Future.delayed(interval);
+        pollCount++;
+
+        var check = await wpClient.evaluateJs(
+          'window["$resultKey"]',
+          tryPromise: false,
+        );
+
+        if (check != null && check != 'null' && check.toString().isNotEmpty) {
+          dynamic parsed;
+          try {
+            parsed = check is String ? jsonDecode(check) : check;
+          } catch (_) {
+            parsed = check;
+          }
+
+          if (parsed is Map) {
+            if (parsed['ok'] == true) {
+              WhatsappLogger.log(
+                "sendFileMessage: sent successfully in "
+                "${stopwatch.elapsed.inSeconds}s",
+              );
+              return Message.parse(parsed['data']).firstOrNull;
+            } else {
+              final errorMsg = parsed['error']?.toString() ?? 'Unknown error';
+              WhatsappLogger.log("sendFileMessage: error - $errorMsg");
+              throw WhatsappException(
+                message: "sendFileMessage failed: $errorMsg",
+                exceptionType: WhatsappExceptionType.failedToSend,
+              );
+            }
+          }
+
+          return Message.parse(parsed).firstOrNull;
+        }
+      }
+
+      WhatsappLogger.log(
+        "sendFileMessage: TIMEOUT after ${timeout.inSeconds}s",
+      );
+      throw WhatsappException(
+        message: "sendFileMessage timed out after ${timeout.inSeconds}s",
+        exceptionType: WhatsappExceptionType.failedToSend,
+      );
+    } finally {
+      await wpClient.evaluateJs(
+        'delete window["$resultKey"]; delete window.__wpp_file_data; delete window["$blobKey"];',
+        tryPromise: false,
+      );
+    }
   }
 
   Future<Message?> sendContactCard({
