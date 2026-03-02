@@ -68,3 +68,7 @@
 ## 0.1.8
 
 * Ignore continously hit whatsapp when no login.
+
+## 0.1.9
+
+- Bug fix
