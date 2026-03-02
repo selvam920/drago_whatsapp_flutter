@@ -63,7 +63,7 @@ class DragoWhatsappFlutter {
 
       if (!loggedIn) {
         WhatsappLogger.log('Login skipped (skipQrScan=true). Disposing resources.');
-        await wpClient?.dispose();
+        await wpClient.dispose();
         onWebViewCreated?.call(null);
         return null;
       }
@@ -118,7 +118,7 @@ class DragoWhatsappFlutter {
 
       if (!loggedIn) {
         WhatsappLogger.log('Login skipped (skipQrScan=true). Disposing resources.');
-        await wpClient?.dispose();
+        await wpClient.dispose();
         return null;
       }
 
