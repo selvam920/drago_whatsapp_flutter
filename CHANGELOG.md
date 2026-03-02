@@ -64,3 +64,7 @@
 ## 0.1.7
 
 * improved windows file send. 
+
+## 0.1.8
+
+* Ignore continously hit whatsapp when no login.
