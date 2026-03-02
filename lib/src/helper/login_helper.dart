@@ -21,11 +21,13 @@ Future<bool> waitForLogin(
   WhatsappLogger.log('Checking authentication status...');
   final wppAuth = WppAuth(wpClient);
 
+  // Brief delay to let the page and WPP state settle
+  await Future.delayed(const Duration(milliseconds: 500));
   bool authenticated = await wppAuth.isAuthenticated();
 
   if (!authenticated && skipQrScan) {
-    WhatsappLogger.log('Authentication required but skipQrScan is true. Skipping login.');
-    onConnectionEvent?.call(ConnectionEvent.disconnected);
+    WhatsappLogger.log('Not authenticated and skipQrScan is true. Returning requireAuth status.');
+    onConnectionEvent?.call(ConnectionEvent.requireAuth);
     return false;
   }
 
