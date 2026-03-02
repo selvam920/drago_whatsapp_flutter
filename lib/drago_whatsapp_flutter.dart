@@ -53,13 +53,20 @@ class DragoWhatsappFlutter {
 
       onConnectionEvent?.call(ConnectionEvent.waitingForLogin);
 
-      await waitForLogin(
+      final loggedIn = await waitForLogin(
         wpClient,
         onConnectionEvent: onConnectionEvent,
         onQrCode: onQrCode,
         waitDurationSeconds: qrCodeWaitDurationSeconds,
         skipQrScan: skipQrScan,
       );
+
+      if (!loggedIn) {
+        WhatsappLogger.log('Login skipped (skipQrScan=true). Disposing resources.');
+        await wpClient?.dispose();
+        onWebViewCreated?.call(null);
+        return null;
+      }
 
       return WhatsappClient(
         wpClient: wpClient,
@@ -101,13 +108,19 @@ class DragoWhatsappFlutter {
       final wppEvents = WppEvents(wpClient);
       await wppEvents.init();
 
-      await waitForLogin(
+      final loggedIn = await waitForLogin(
         wpClient,
         onConnectionEvent: onConnectionEvent,
         onQrCode: onQrCode,
         waitDurationSeconds: qrCodeWaitDurationSeconds,
         skipQrScan: skipQrScan,
       );
+
+      if (!loggedIn) {
+        WhatsappLogger.log('Login skipped (skipQrScan=true). Disposing resources.');
+        await wpClient?.dispose();
+        return null;
+      }
 
       return WhatsappClient(
         wpClient: wpClient,

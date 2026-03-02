@@ -9,7 +9,9 @@ import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 /// or failed with timeout exception
 /// this method will automatically try to get the qrCode
 /// also it will make sure that we get the latest qrCode
-Future<void> waitForLogin(
+/// Returns `true` if login succeeded, `false` if login was skipped
+/// because [skipQrScan] is true and the user is not authenticated.
+Future<bool> waitForLogin(
   WpClientInterface wpClient, {
   required Function(String qrCodeUrl, Uint8List? qrCodeImage)? onQrCode,
   int waitDurationSeconds = 60,
@@ -22,9 +24,9 @@ Future<void> waitForLogin(
   bool authenticated = await wppAuth.isAuthenticated();
 
   if (!authenticated && skipQrScan) {
-    WhatsappLogger.log('Authentication required but skipQrScan is true. Redirecting to google.com...');
-    await wpClient.loadUrl('https://www.google.com');
-    return;
+    WhatsappLogger.log('Authentication required but skipQrScan is true. Skipping login.');
+    onConnectionEvent?.call(ConnectionEvent.disconnected);
+    return false;
   }
 
   if (!authenticated) {
@@ -97,6 +99,7 @@ Future<void> waitForLogin(
 
   WhatsappLogger.log('Connected successfully');
   onConnectionEvent?.call(ConnectionEvent.connected);
+  return true;
 }
 
 Future<bool> waitForInChat(WpClientInterface wpClient) async {
