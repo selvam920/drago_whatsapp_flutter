@@ -2,7 +2,7 @@ import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 import 'package:example/inapp_view.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'home_controller.dart';
 
 class HomeView extends GetView<HomeController> {
