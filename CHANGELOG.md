@@ -72,3 +72,7 @@
 ## 0.1.9
 
 - Bug fix
+
+## 0.2.0
+
+- Migrated with material ui package

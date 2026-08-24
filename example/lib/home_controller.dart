@@ -373,10 +373,10 @@ class HomeController extends GetxController {
       default:
         break;
     }
-    FilePickerResult? result =
-        await FilePicker.platform.pickFiles(type: fileType);
-    String? path = result?.files.first.path;
-    String? name = result?.names.first;
+    final result = await FilePicker.pickFiles(type: fileType);
+    if (result.isEmpty) return;
+    String? path = result.first.path;
+    String? name = result.first.name;
     await _sendFileMessage(path, name, whatsappFileType);
   }
 }
