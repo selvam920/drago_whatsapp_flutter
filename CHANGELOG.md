@@ -76,3 +76,7 @@
 ## 0.2.0
 
 - Migrated with material ui package
+
+## 0.2.1
+
+- Migrated Android AGP
