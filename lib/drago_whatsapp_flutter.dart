@@ -18,14 +18,19 @@ class DragoWhatsappFlutter {
     Duration? connectionTimeout = const Duration(seconds: 20),
     Function(HeadlessInAppWebView? headlessInAppWebView)? onWebViewCreated,
     String? wppVersion,
+    String? wppJsContent,
     Map<String, dynamic>? wppConfig,
-    bool enableHttpOverrides = true,
+    @Deprecated('Turns off TLS certificate checks for every HttpClient in '
+        'the app. WhatsApp Web does not need it; will be removed.')
+    bool enableHttpOverrides = false,
     bool skipQrScan = false,
+    bool autoTakeover = true,
   }) async {
     WpClientInterface? wpClient;
 
     try {
       if (enableHttpOverrides) {
+        // ignore: deprecated_member_use_from_same_package
         HttpOverrides.global = MyHttpOverrides();
       }
       onConnectionEvent?.call(ConnectionEvent.initializing);
@@ -44,7 +49,9 @@ class DragoWhatsappFlutter {
       await WppConnect.init(
         wpClient,
         wppVersion: wppVersion,
+        wppJsContent: wppJsContent,
         config: wppConfig,
+        autoTakeover: autoTakeover,
       );
 
       // Initialize Events before waiting for login to capture early events
@@ -59,6 +66,10 @@ class DragoWhatsappFlutter {
         onQrCode: onQrCode,
         waitDurationSeconds: qrCodeWaitDurationSeconds,
         skipQrScan: skipQrScan,
+        wppVersion: wppVersion,
+        wppJsContent: wppJsContent,
+        wppConfig: wppConfig,
+        autoTakeover: autoTakeover,
       );
 
       if (!loggedIn) {
@@ -87,13 +98,21 @@ class DragoWhatsappFlutter {
     Function(ConnectionEvent)? onConnectionEvent,
     Duration? connectionTimeout = const Duration(seconds: 20),
     String? wppVersion,
+    String? wppJsContent,
     Map<String, dynamic>? wppConfig,
+    @Deprecated('Turns off TLS certificate checks for every HttpClient in '
+        'the app. WhatsApp Web does not need it; will be removed.')
+    bool enableHttpOverrides = false,
     bool skipQrScan = false,
+    bool autoTakeover = true,
   }) async {
     WpClientInterface? wpClient;
 
     try {
-      HttpOverrides.global = MyHttpOverrides();
+      if (enableHttpOverrides) {
+        // ignore: deprecated_member_use_from_same_package
+        HttpOverrides.global = MyHttpOverrides();
+      }
 
       wpClient = WhatsappInAppFlutterClient(controller: controller);
       wpClient.sessionPath =
@@ -101,7 +120,9 @@ class DragoWhatsappFlutter {
       await WppConnect.init(
         wpClient,
         wppVersion: wppVersion,
+        wppJsContent: wppJsContent,
         config: wppConfig,
+        autoTakeover: autoTakeover,
       );
 
       // Initialize Events before waiting for login to capture early events
@@ -114,6 +135,10 @@ class DragoWhatsappFlutter {
         onQrCode: onQrCode,
         waitDurationSeconds: qrCodeWaitDurationSeconds,
         skipQrScan: skipQrScan,
+        wppVersion: wppVersion,
+        wppJsContent: wppJsContent,
+        wppConfig: wppConfig,
+        autoTakeover: autoTakeover,
       );
 
       if (!loggedIn) {
@@ -128,7 +153,7 @@ class DragoWhatsappFlutter {
       );
     } catch (e) {
       WhatsappLogger.log(e.toString());
-      wpClient?.dispose();
+      await wpClient?.dispose();
       rethrow;
     }
   }
@@ -164,11 +189,6 @@ class DragoWhatsappFlutter {
       ),
       onConsoleMessage: (controller, consoleMessage) {
         WhatsappLogger.log("ConsoleLog: ${consoleMessage.message}");
-      },
-      onReceivedServerTrustAuthRequest: (controller, challenge) async {
-        return ServerTrustAuthResponse(
-          action: ServerTrustAuthResponseAction.PROCEED,
-        );
       },
       initialSettings: InAppWebViewSettings(
         isInspectable: kDebugMode,
@@ -260,6 +280,8 @@ class DragoWhatsappFlutter {
   }
 }
 
+/// Accepts any TLS certificate for every host -- do not install globally.
+@Deprecated('Disables TLS certificate validation app-wide; will be removed.')
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {

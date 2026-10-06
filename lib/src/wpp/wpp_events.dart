@@ -19,6 +19,12 @@ class WppEvents {
     await wpClient.initializeEventListener(_onNewEvent);
   }
 
+  /// Closes both streams; call once the client is gone.
+  Future<void> dispose() async {
+    await connectionEventStreamController.close();
+    await qrCodeStreamController.close();
+  }
+
   void _onNewEvent(String eventName, dynamic eventData) {
     switch (eventName) {
       case "connectionEvent":
@@ -37,7 +43,7 @@ class WppEvents {
         base64Image: eventData['base64Image'],
         urlCode: eventData['urlCode'],
       );
-      qrCodeStreamController.add(qrCode);
+      if (!qrCodeStreamController.isClosed) qrCodeStreamController.add(qrCode);
     }
   }
 
@@ -98,7 +104,9 @@ class WppEvents {
       }
     }
 
-    if (connectionEvent == null) return;
+    if (connectionEvent == null || connectionEventStreamController.isClosed) {
+      return;
+    }
     connectionEventStreamController.add(connectionEvent);
   }
 }

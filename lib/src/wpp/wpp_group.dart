@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 
 class WppGroup {
@@ -18,6 +20,36 @@ class WppGroup {
       methodName: "getParticipants",
       forceJsonParseResult: true,
     );
+  }
+
+  /// Groups this account is in, light enough for a picker. Pass an item's
+  /// `id` as the `phone` of any chat send method.
+  Future<List<WhatsappChatSummary>> list() async {
+    final result = await wpClient.evaluateJs(
+      '''(async function() {
+        var chats = await window.WPP.chat.list({onlyGroups: true});
+        return chats.map(function(c) {
+          var meta = c.groupMetadata || {};
+          var admin = null;
+          try {
+            if (meta.participants && typeof meta.participants.iAmAdmin === 'function') {
+              admin = !!meta.participants.iAmAdmin();
+            }
+          } catch (e) {}
+          var count = null;
+          try { count = meta.participants ? meta.participants.length : null; } catch (e) {}
+          return {
+            id: c.id && c.id._serialized ? c.id._serialized : String(c.id),
+            name: c.name || meta.subject || c.formattedTitle || '',
+            announce: !!meta.announce,
+            isAdmin: admin,
+            memberCount: count
+          };
+        });
+      })()''',
+      methodName: "groupList",
+    );
+    return WhatsappChatSummary.parseList(result);
   }
 
   /// To get all groups
@@ -45,7 +77,7 @@ class WppGroup {
     required String groupId,
     required List<String> phoneNumbers,
   }) async {
-    List<String> parseList = phoneNumbers.map((e) => e.phoneParse).toList();
+    final parseList = jsonEncode(phoneNumbers.map(parsePhone).toList());
     return await wpClient.evaluateJs(
       '''window.WPP.group.addParticipants(${groupId.groupParse},$parseList);''',
       methodName: "addParticipants",
@@ -57,7 +89,7 @@ class WppGroup {
     required String groupId,
     required List<String> phoneNumbers,
   }) async {
-    List<String> parseList = phoneNumbers.map((e) => e.phoneParse).toList();
+    final parseList = jsonEncode(phoneNumbers.map(parsePhone).toList());
     return await wpClient.evaluateJs(
       '''window.WPP.group.removeParticipants(${groupId.groupParse}, $parseList);''',
       methodName: "removeParticipants",
@@ -69,7 +101,7 @@ class WppGroup {
     required String groupId,
     required List<String> phoneNumbers,
   }) async {
-    List<String> parseList = phoneNumbers.map((e) => e.phoneParse).toList();
+    final parseList = jsonEncode(phoneNumbers.map(parsePhone).toList());
     return await wpClient.evaluateJs(
       '''window.WPP.group.promoteParticipants(${groupId.groupParse}, $parseList);''',
       methodName: "promoteParticipants",
@@ -81,7 +113,7 @@ class WppGroup {
     required String groupId,
     required List<String> phoneNumbers,
   }) async {
-    List<String> parseList = phoneNumbers.map((e) => e.phoneParse).toList();
+    final parseList = jsonEncode(phoneNumbers.map(parsePhone).toList());
     return await wpClient.evaluateJs(
       '''window.WPP.group.demoteParticipants(${groupId.groupParse}, $parseList);''',
       methodName: "demoteParticipants",

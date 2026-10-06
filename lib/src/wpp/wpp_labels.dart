@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 
 class WppLabels {
@@ -39,9 +41,9 @@ class WppLabels {
     required List<String> labelIds,
     required List<String> chatIds,
   }) async {
-    List<String> parsedChatIds = chatIds.map((e) => e.phoneParse).toList();
+    final parsedChatIds = jsonEncode(chatIds.map(parsePhone).toList());
     return await wpClient.evaluateJs(
-      '''window.WPP.labels.addOrRemoveLabels($labelIds, $parsedChatIds);''',
+      '''window.WPP.labels.addOrRemoveLabels(${jsonEncode(labelIds)}, $parsedChatIds);''',
       methodName: "addOrRemoveLabels",
     );
   }

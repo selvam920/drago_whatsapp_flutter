@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:mime/mime.dart';
+
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 
 class WppStatus {
@@ -27,7 +29,8 @@ class WppStatus {
     String? caption,
   }) async {
     String base64Image = base64Encode(fileBytes);
-    String fileData = "data:image/jpeg;base64,$base64Image";
+    final mime = lookupMimeType('', headerBytes: fileBytes) ?? 'image/jpeg';
+    String fileData = "data:$mime;base64,$base64Image";
     await _injectFileData(fileData);
     try {
       return await wpClient.evaluateJs(
@@ -47,7 +50,8 @@ class WppStatus {
     String? caption,
   }) async {
     String base64Video = base64Encode(fileBytes);
-    String fileData = "data:video/mp4;base64,$base64Video";
+    final mime = lookupMimeType('', headerBytes: fileBytes) ?? 'video/mp4';
+    String fileData = "data:$mime;base64,$base64Video";
     await _injectFileData(fileData);
     try {
       return await wpClient.evaluateJs(

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:mime/mime.dart';
@@ -24,7 +25,7 @@ class WhatsAppMetadata {
   // "web.whatsapp.com/🌎/en/";
   static String whatsAppURLForceDesktop = "web.whatsapp.com//";
   static String userAgent =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 }
 
 class WhatsappBotUtils {
@@ -76,44 +77,48 @@ Future validateConnection(WpClientInterface wpClient) async {
   }
 }
 
-/// Use [JsParse] extension on data we pass in Javascript string
+/// Use [JsParse] extension on data we pass in Javascript string.
+///
+/// Strings, numbers, booleans, lists and maps become JSON literals, so quotes,
+/// backslashes and control characters in user text can never break out of the
+/// generated script. `null` stays `null` (it interpolates as the JS literal).
 extension JsParser on dynamic {
   dynamic get jsParse {
-    if (this == null) {
-      return null;
-    } else if (runtimeType == String) {
-      return '''"${this.replaceAll("\n", "\\n").replaceAll("\"", "\\\"")}"''';
-    } else {
-      // return same for now
-      return this;
+    final value = this;
+    if (value == null) return null;
+    if (value is String ||
+        value is num ||
+        value is bool ||
+        value is List ||
+        value is Map) {
+      return jsonEncode(value);
     }
+    return value;
   }
 
-  String get phoneParse => parsePhone(this).jsParse;
+  String get phoneParse => jsonEncode(parsePhone(this));
 
-  String get groupParse => parseGroup(this).jsParse;
+  String get groupParse => jsonEncode(parseGroup(this));
 }
 
-/// [parsePhone] will try to convert phone number in required format
+/// Digits only, for a number typed with spaces, dashes, brackets or `+`.
+String _digits(String phone) => phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+/// [parsePhone] will try to convert phone number in required format.
+/// A full chat id (`...@c.us`, `...@g.us`, `...@newsletter`, `...@lid`)
+/// is passed through unchanged, so groups and channels can be sent to with
+/// the same methods.
 String parsePhone(String phone) {
-  String chatSuffix = "@c.us";
-  String phoneNum = phone.replaceAll("+", "");
-  // Already has a valid WA suffix — leave as-is
-  if (phoneNum.contains("@")) {
-    return phoneNum;
-  }
-  return "$phoneNum$chatSuffix";
+  final trimmed = phone.trim();
+  if (trimmed.contains("@")) return trimmed;
+  return "${_digits(trimmed)}@c.us";
 }
 
 /// [parseGroup] will try to convert group number in required format
 String parseGroup(String phone) {
-  String groupSuffix = "@g.us";
-  String phoneNum = phone.replaceAll("+", "");
-  // Already has a valid WA suffix — leave as-is
-  if (phoneNum.contains("@")) {
-    return phoneNum;
-  }
-  return "$phoneNum$groupSuffix";
+  final trimmed = phone.trim();
+  if (trimmed.contains("@")) return trimmed;
+  return "${trimmed.replaceAll(RegExp(r'[^0-9-]'), '')}@g.us";
 }
 
 /// [getMimeType] returns the MIME type for the given file.

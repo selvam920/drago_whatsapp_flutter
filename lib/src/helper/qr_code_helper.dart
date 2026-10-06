@@ -15,15 +15,17 @@ Future<void> waitForQrCodeScan({
   final startTime = DateTime.now();
 
   // Add a listener for QR code change to be more reactive
+  Future<void> onCodeChange(dynamic _) async {
+    final result = await wpClient.getQrCode();
+    if (result != null && result.urlCode != urlCode) {
+      urlCode = result.urlCode;
+      attempt++;
+      onCatchQR?.call(result, attempt);
+    }
+  }
+
   try {
-    wpClient.on(WhatsappEvent.connauthcodechange, (data) async {
-      final result = await wpClient.getQrCode();
-      if (result != null && result.urlCode != urlCode) {
-        urlCode = result.urlCode;
-        attempt++;
-        onCatchQR?.call(result, attempt);
-      }
-    });
+    await wpClient.on(WhatsappEvent.connauthcodechange, onCodeChange);
   } catch (e) {
     WhatsappLogger.log("Failed to set QR code change listener: $e");
   }
@@ -54,6 +56,8 @@ Future<void> waitForQrCodeScan({
       await Future.delayed(const Duration(milliseconds: 1000));
     }
   } finally {
-    wpClient.off(WhatsappEvent.connauthcodechange);
+    try {
+      await wpClient.off(WhatsappEvent.connauthcodechange, onCodeChange);
+    } catch (e) {}
   }
 }

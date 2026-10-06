@@ -6,3 +6,4 @@ export 'package:drago_whatsapp_flutter/src/model/message.dart';
 export 'package:drago_whatsapp_flutter/src/model/connection_event.dart';
 export 'package:drago_whatsapp_flutter/src/model/qr_code_image.dart';
 export 'package:drago_whatsapp_flutter/src/model/whatsapp_exception.dart';
+export 'package:drago_whatsapp_flutter/src/model/whatsapp_chat_summary.dart';

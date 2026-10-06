@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:drago_whatsapp_flutter/drago_whatsapp_flutter.dart';
-import 'package:drago_whatsapp_flutter/src/wpp/wpp_conn.dart';
-import 'package:drago_whatsapp_flutter/src/wpp/wpp_group.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 
 /// get [WhatsappClient] from `WhatsappBotFlutter.connect()`
@@ -18,6 +16,7 @@ class WhatsappClient {
   late final WppConn conn;
   late final WppStatus status;
   late final WppLabels labels;
+  late final WppNewsletter newsletter;
   late final WppEvents _wppEvents;
   late final WppAuth _wppAuth;
 
@@ -32,10 +31,13 @@ class WhatsappClient {
     conn = WppConn(wpClient);
     status = WppStatus(wpClient);
     labels = WppLabels(wpClient);
+    newsletter = WppNewsletter(wpClient);
     _wppAuth = WppAuth(wpClient);
     _wppEvents = wppEvents ?? WppEvents(wpClient);
     if (wppEvents == null) {
-      _wppEvents.init();
+      _wppEvents.init().catchError((Object e) {
+        WhatsappLogger.log("WppEvents init failed: $e");
+      });
     }
   }
 
@@ -44,8 +46,10 @@ class WhatsappClient {
   Future<void> on(String event, Function(dynamic) callback) =>
       wpClient.on(event, callback);
 
-  /// To remove listener from any event from WPP
-  Future<void> off(String event) => wpClient.off(event);
+  /// To remove a listener added with [on]; without [callback], every
+  /// listener this client added for [event]
+  Future<void> off(String event, [Function(dynamic)? callback]) =>
+      wpClient.off(event, callback);
 
   /// To run a custom function on WPP
   Future executeFunction(
@@ -83,6 +87,7 @@ class WhatsappClient {
     try {
       if (tryLogout) await logout();
       await wpClient.dispose();
+      await _wppEvents.dispose();
     } catch (e) {
       WhatsappLogger.log(e);
     }

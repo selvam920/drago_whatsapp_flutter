@@ -1,5 +1,19 @@
 import 'dart:convert';
 
+/// WhatsApp's delivery state of a message (`msg.ack`).
+class MessageAck {
+  static const int error = -1;
+  static const int pending = 0;
+
+  /// Accepted by WhatsApp's server -- the message is sent.
+  static const int server = 1;
+
+  /// Reached the recipient's device.
+  static const int device = 2;
+  static const int read = 3;
+  static const int played = 4;
+}
+
 class Message {
   Message({
     required this.id,
@@ -28,6 +42,7 @@ class Message {
     required this.requiresDirectConnection,
     required this.pttForwardedFeaturesEnabled,
     required this.caption,
+    this.ack = MessageAck.pending,
   });
 
   final MessageId? id;
@@ -56,6 +71,16 @@ class Message {
   final bool requiresDirectConnection;
   final bool pttForwardedFeaturesEnabled;
   final String caption;
+
+  /// See [MessageAck].
+  final int ack;
+
+  /// WhatsApp reported the send as failed.
+  bool get isFailed => ack <= MessageAck.error;
+
+  /// The server accepted it (or better). A send that returned a message and is
+  /// not [isFailed] but still [MessageAck.pending] is queued on the phone link.
+  bool get isSent => ack >= MessageAck.server;
 
   Message copyWith({
     MessageId? id,
@@ -117,6 +142,7 @@ class Message {
       pttForwardedFeaturesEnabled:
           pttForwardedFeaturesEnabled ?? this.pttForwardedFeaturesEnabled,
       caption: caption ?? this.caption,
+      ack: ack ?? this.ack,
     );
   }
 
@@ -179,6 +205,9 @@ class Message {
       requiresDirectConnection: json["requiresDirectConnection"] == true || json["requiresDirectConnection"]?.toString() == "true",
       pttForwardedFeaturesEnabled: json["pttForwardedFeaturesEnabled"] == true || json["pttForwardedFeaturesEnabled"]?.toString() == "true",
       caption: json["caption"]?.toString() ?? "",
+      ack: json["ack"] is num
+          ? (json["ack"] as num).toInt()
+          : (int.tryParse(json["ack"]?.toString() ?? "") ?? MessageAck.pending),
     );
   }
 
@@ -209,6 +238,7 @@ class Message {
         "requiresDirectConnection": requiresDirectConnection,
         "pttForwardedFeaturesEnabled": pttForwardedFeaturesEnabled,
         "caption": caption,
+        "ack": ack,
       };
 }
 

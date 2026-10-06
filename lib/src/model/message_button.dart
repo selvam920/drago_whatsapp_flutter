@@ -1,5 +1,3 @@
-import 'package:drago_whatsapp_flutter/src/helper/utils.dart';
-
 class MessageButtons {
   String text;
   String buttonData;
@@ -13,8 +11,8 @@ class MessageButtons {
 
   Map<String, dynamic> toJson() {
     return {
-      "text".jsParse: text.jsParse,
-      buttonType.name.jsParse: buttonData.jsParse,
+      "text": text,
+      buttonType.name: buttonData,
     };
   }
 }

@@ -80,3 +80,16 @@
 ## 0.2.1
 
 - Migrated Android AGP
+
+## 0.3.0
+
+- **Breaking:** no global `HttpOverrides` by default (`enableHttpOverrides` is deprecated and `false`); the headless WebView no longer accepts invalid certificates.
+- **Breaking:** `WpClientInterface.off(event, [callback])` removes only this client's listener, and `restoreListeners()` was added. Several callbacks may share one event.
+- `Message.ack` / `isSent` / `isFailed` and `MessageAck`; `chat.getMessageAck`.
+- Groups and channels: `group.list()`, `newsletter.list()`, `WhatsappChatSummary`; send methods accept a full chat id (`@g.us`, `@newsletter`).
+- `chat.sendCatalogMessage` for the WhatsApp Business catalog.
+- JS arguments are JSON-encoded (quotes, backslashes and lists in messages no longer break the script); phone numbers lose spaces and dashes.
+- wa-js pinned to `WppConnect.defaultWppVersion` with fallback to latest; `wppJsContent` to ship the script; `autoTakeover` option.
+- `isValidContact` returns the real result; file sends are queued and match only their own message; no file-name caption on images; status images keep their real MIME type.
+- Connection wait no longer overlaps checks, and re-injects WPP with the same version/config after its recovery reload.
+- Headless and embedded clients share one base class; event streams close on disconnect.

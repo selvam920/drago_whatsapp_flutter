@@ -1,9 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 
 class WppChat {
   WpClientInterface wpClient;
   WppChat(this.wpClient);
+
+  /// File sends run one at a time: each one recognises its own message as the
+  /// newest outgoing media in the chat, which two overlapping sends to the
+  /// same chat would confuse.
+  Future<void> _fileSendQueue = Future.value();
+  static int _keySeq = 0;
+
+  static String _uniqueKey(String prefix) =>
+      '${prefix}_${DateTime.now().microsecondsSinceEpoch}_${_keySeq++}';
 
   /// [sendMessage] may throw errors if passed an invalid contact
   /// returns [Message] object if sent successfully
@@ -58,6 +68,45 @@ class WppChat {
     bool audioAsPtt = false,
     List<MessageButtons>? buttons,
     Duration timeout = const Duration(seconds: 120),
+  }) {
+    final previous = _fileSendQueue;
+    final done = Completer<void>();
+    _fileSendQueue = done.future;
+    return previous
+        .then((_) => _sendFileMessage(
+              phone: phone,
+              fileType: fileType,
+              fileBytes: fileBytes,
+              fileName: fileName,
+              caption: caption,
+              mimetype: mimetype,
+              replyMessageId: replyMessageId,
+              templateTitle: templateTitle,
+              templateFooter: templateFooter,
+              useTemplate: useTemplate,
+              isViewOnce: isViewOnce,
+              audioAsPtt: audioAsPtt,
+              buttons: buttons,
+              timeout: timeout,
+            ))
+        .whenComplete(done.complete);
+  }
+
+  Future<Message?> _sendFileMessage({
+    required String phone,
+    required WhatsappFileType fileType,
+    required List<int> fileBytes,
+    String? fileName,
+    String? caption,
+    String? mimetype,
+    MessageId? replyMessageId,
+    String? templateTitle,
+    String? templateFooter,
+    bool useTemplate = false,
+    bool isViewOnce = false,
+    bool audioAsPtt = false,
+    List<MessageButtons>? buttons,
+    Duration timeout = const Duration(seconds: 120),
   }) async {
     String base64Image = base64Encode(fileBytes);
     String mimeType = mimetype ?? getMimeType(fileType, fileName, fileBytes);
@@ -95,7 +144,7 @@ class WppChat {
     // For large files, skip building the full data URI string in JS entirely.
     // Instead, send raw base64 chunks and decode each to binary immediately.
     // This avoids O(n²) string concatenation and reduces memory pressure.
-    final blobKey = '__wpp_file_blob_${DateTime.now().millisecondsSinceEpoch}';
+    final blobKey = _uniqueKey('__wpp_file_blob');
     const int chunkSize = 2 * 1024 * 1024; // 2MB chunks (base64 chars)
     // Ensure chunks align to 4-char base64 boundaries for valid atob()
     const int alignedChunkSize = (chunkSize ~/ 4) * 4;
@@ -175,8 +224,7 @@ class WppChat {
     // The high-level API hangs because chat.msgs.on('add') never fires
     // on some Windows WebView2 setups. Instead we call the WPP internals
     // directly and poll for the sent message.
-    final resultKey =
-        '__wpp_send_result_${DateTime.now().millisecondsSinceEpoch}';
+    final resultKey = _uniqueKey('__wpp_send_result');
     final jsTimeoutMs = timeout.inMilliseconds;
 
     String wrappedSource = '''(function() {
@@ -185,11 +233,35 @@ class WppChat {
       (async function() {
         try {
           var fileObj = window['$blobKey'];
-          var chat = await window.WPP.chat.find(${phone.phoneParse});
+          var chatId = ${phone.phoneParse};
+          var captionText = ${caption.jsParse};
+
+          // Channels upload media differently; the high-level API handles it.
+          if (chatId.endsWith('@newsletter')) {
+            var nlResult = await window.WPP.chat.sendFileMessage(chatId, fileObj, {
+              type: ${fileTypeName.jsParse},
+              caption: captionText || undefined,
+              filename: fileObj.name,
+              createChat: false
+            });
+            window['$resultKey'] = JSON.stringify({ok: true, data: {
+              id: nlResult && nlResult.id ? String(nlResult.id) : null,
+              ack: nlResult && nlResult.ack != null ? nlResult.ack : 1
+            }});
+            return;
+          }
+
+          var chat = await window.WPP.chat.find(chatId);
           if (!chat) throw new Error('Chat not found');
 
-          // Snapshot current message count
-          var msgCountBefore = chat.msgs ? chat.msgs.length : 0;
+          // Snapshot the messages already in the chat, so only a new one can
+          // be taken for ours
+          function msgModels() {
+            return chat.msgs ? (chat.msgs.models || chat.msgs._models || []) : [];
+          }
+          var idsBefore = new Set(msgModels().map(function(m) {
+            return m && m.id ? (m.id._serialized || String(m.id)) : null;
+          }));
 
           var opaqueData = await window.WPP.whatsapp.OpaqueData.createFromData(fileObj, fileObj.type);
 
@@ -202,14 +274,14 @@ class WppChat {
           var mediaPrep = window.WPP.whatsapp.MediaPrep.prepRawMedia(opaqueData, rawMediaOptions);
           await mediaPrep.waitForPrep();
 
-          // Build send options
-          var captionText = ${caption.jsParse} || fileObj.name;
+          // Build send options. No caption means none -- a document still
+          // shows its file name; an image shouldn't get it as a caption.
           var sendOptions = {
-            caption: captionText,
+            caption: captionText || undefined,
             filename: fileObj.name,
             footer: ${templateFooter.jsParse} || undefined,
             quotedMsg: ${replyTextId.jsParse} || undefined,
-            isCaptionByUser: ${caption.jsParse} != null,
+            isCaptionByUser: captionText != null,
             type: fileTypeName,
             isViewOnce: ${isViewOnce.jsParse} || undefined,
             useTemplateButtons: ${useTemplate.jsParse},
@@ -232,11 +304,11 @@ class WppChat {
 
           // Helper: find the latest outgoing media message in chat
           function findSentMsg() {
-            if (!chat.msgs || chat.msgs.length <= msgCountBefore) return null;
-            var models = chat.msgs.models || chat.msgs._models || [];
+            var models = msgModels();
             for (var i = models.length - 1; i >= Math.max(0, models.length - 10); i--) {
               var m = models[i];
-              if (m && m.id && m.id.fromMe && m.t && (m.t * 1000) > (pollStart - 5000)) {
+              if (!m || !m.id || idsBefore.has(m.id._serialized || String(m.id))) continue;
+              if (m.id.fromMe && m.t && (m.t * 1000) > (pollStart - 5000)) {
                 var mType = m.type || '';
                 if (mType === 'image' || mType === 'ptt' || mType === 'audio' ||
                     mType === 'video' || mType === 'document' || mType === 'sticker') {
@@ -407,13 +479,13 @@ class WppChat {
   }
 
   /// check if the given Phone number is a valid phone number
+  /// Returns false when the number has no WhatsApp account.
   Future<bool> isValidContact({required String phone}) async {
-    await wpClient.evaluateJs(
-      '''window.WPP.contact.queryExists(${phone.phoneParse});''',
+    final result = await wpClient.evaluateJs(
+      '''window.WPP.contact.queryExists(${phone.phoneParse}).then(function(r) { return !!r; })''',
       methodName: "isValidContact",
     );
-    // return true by default , it will crash on any issue
-    return true;
+    return result == true;
   }
 
   /// to check if we [canMute] phone number
@@ -659,5 +731,38 @@ class WppChat {
       '''window.WPP.chat.unpinMsg(${messageId.serialized.jsParse});''',
       methodName: "unpinMessage",
     );
+  }
+
+  /// Sends the WhatsApp Business catalog of [catalogOwner] (usually this
+  /// account's own number) to [phone] -- a contact, a group id or a channel id.
+  /// [jpegThumbnail] is a `data:image/jpeg;base64,...` preview.
+  Future<Message?> sendCatalogMessage({
+    required String phone,
+    required String catalogOwner,
+    String? title,
+    String? description,
+    String? textMessage,
+    String? jpegThumbnail,
+  }) async {
+    var result = await wpClient.evaluateJs(
+      '''window.WPP.chat.sendCatalogMessage(${phone.phoneParse}, ${catalogOwner.phoneParse}, {
+            title: ${title.jsParse} || undefined,
+            description: ${description.jsParse} || undefined,
+            textMessage: ${textMessage.jsParse} || undefined,
+            jpegThumbnail: ${jpegThumbnail.jsParse} || undefined
+          });''',
+      methodName: "sendCatalogMessage",
+    );
+    return Message.parse(result).firstOrNull;
+  }
+
+  /// Current delivery state of a sent message, see [MessageAck]. Null when
+  /// the message is no longer loaded.
+  Future<int?> getMessageAck({required MessageId messageId}) async {
+    final result = await wpClient.evaluateJs(
+      '''window.WPP.chat.getMessageById(${messageId.serialized.jsParse}).then(function(m) { return m ? m.ack : null; }).catch(function() { return null; })''',
+      methodName: "getMessageAck",
+    );
+    return result is num ? result.toInt() : int.tryParse('$result');
   }
 }

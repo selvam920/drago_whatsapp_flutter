@@ -26,7 +26,7 @@ Add the dependency to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  drago_whatsapp_flutter: ^0.1.0
+  drago_whatsapp_flutter: ^0.3.0
 ```
 
 or run:
@@ -94,6 +94,45 @@ await client?.chat.sendTextMessage(
 );
 ```
 
+### Check the result
+
+A send returns a `Message` whose `ack` is WhatsApp's delivery state
+(`MessageAck`): `-1` failed, `0` pending, `1` accepted by the server (sent),
+`2` delivered, `3` read. A send that throws or returns `null` did not go out.
+
+```dart
+final msg = await client?.chat.sendTextMessage(phone: "91...", message: "Hi");
+final sent = msg != null && !msg.isFailed;
+```
+
+When sending to many numbers, pause a few seconds between sends -- rapid bulk
+sends are the quickest way to get a number banned.
+
+### Groups and Channels
+
+Every send method takes a full chat id as `phone`, so the same calls post to a
+group (`...@g.us`) or a channel you own or administer (`...@newsletter`).
+
+```dart
+final groups = await client!.group.list();          // WhatsappChatSummary
+final channels = await client!.newsletter.list();
+for (final target in [...groups, ...channels].where((t) => t.canPost)) {
+  await client!.chat.sendFileMessage(
+    phone: target.id,
+    fileBytes: catalogPage,
+    fileType: WhatsappFileType.image,
+    caption: "New arrivals",
+  );
+}
+
+// The WhatsApp Business catalog itself, as a tap-to-browse card
+await client!.chat.sendCatalogMessage(
+  phone: groups.first.id,
+  catalogOwner: "91XXXXXXXXXX", // your business number
+  textMessage: "Browse our catalog",
+);
+```
+
 ### Listen to Incoming Messages
 
 ```dart
@@ -108,13 +147,26 @@ client?.on(WhatsappEvent.chatnewmessage, (data) {
 ## Advanced Configuration
 
 ### Using specific wa-js version
-You can specify a version from [wa-js releases](https://github.com/wppconnect-team/wa-js/releases).
+By default a tested wa-js release (`WppConnect.defaultWppVersion`) is
+downloaded, falling back to the latest release if that download fails. Pick
+another tag from [wa-js releases](https://github.com/wppconnect-team/wa-js/releases),
+or ship the script with your app and pass it as `wppJsContent`.
 
 ```dart
 client = await DragoWhatsappFlutter.connect(
-  wppVersion: "1.30.0",
+  wppVersion: "v4.6.1",
 );
 ```
+
+### Session takeover
+With `autoTakeover: true` (the default) the bot takes the session back when
+WhatsApp Web is opened elsewhere. Turn it off if the business also uses
+WhatsApp Web in a browser, or the two keep kicking each other off.
+
+### TLS
+This package no longer installs a global `HttpOverrides`. The old
+`enableHttpOverrides` flag is deprecated and off by default: it disabled
+certificate checks for every `HttpClient` in the app.
 
 ### Visual Browser Integration
 

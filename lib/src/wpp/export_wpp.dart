@@ -6,3 +6,6 @@ export 'package:drago_whatsapp_flutter/src/wpp/wpp_events.dart';
 export 'package:drago_whatsapp_flutter/src/wpp/wpp_profile.dart';
 export 'package:drago_whatsapp_flutter/src/wpp/wpp_status.dart';
 export 'package:drago_whatsapp_flutter/src/wpp/wpp_labels.dart';
+export 'package:drago_whatsapp_flutter/src/wpp/wpp_newsletter.dart';
+export 'package:drago_whatsapp_flutter/src/wpp/wpp_group.dart';
+export 'package:drago_whatsapp_flutter/src/wpp/wpp_conn.dart';

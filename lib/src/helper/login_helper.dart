@@ -17,6 +17,10 @@ Future<bool> waitForLogin(
   int waitDurationSeconds = 60,
   Function(ConnectionEvent)? onConnectionEvent,
   bool skipQrScan = false,
+  String? wppVersion,
+  String? wppJsContent,
+  Map<String, dynamic>? wppConfig,
+  bool autoTakeover = true,
 }) async {
   WhatsappLogger.log('Checking authentication status...');
   final wppAuth = WppAuth(wpClient);
@@ -36,9 +40,11 @@ Future<bool> waitForLogin(
     WhatsappLogger.log('Waiting for QRCode Scan...');
 
     final authCompleter = Completer<void>();
-    wpClient.on(WhatsappEvent.connauthenticated, (_) {
+    void onAuthenticated(dynamic _) {
       if (!authCompleter.isCompleted) authCompleter.complete();
-    });
+    }
+
+    await wpClient.on(WhatsappEvent.connauthenticated, onAuthenticated);
 
     try {
       await Future.any([
@@ -68,7 +74,7 @@ Future<bool> waitForLogin(
         exceptionType: WhatsappExceptionType.unknown,
       );
     } finally {
-      wpClient.off(WhatsappEvent.connauthenticated);
+      await wpClient.off(WhatsappEvent.connauthenticated, onAuthenticated);
     }
 
     WhatsappLogger.log('Checking login status after scan...');
@@ -91,7 +97,13 @@ Future<bool> waitForLogin(
   onConnectionEvent?.call(ConnectionEvent.connecting);
 
   // Wait for main interface to be ready
-  final isReady = await waitForInChat(wpClient);
+  final isReady = await waitForInChat(
+    wpClient,
+    wppVersion: wppVersion,
+    wppJsContent: wppJsContent,
+    wppConfig: wppConfig,
+    autoTakeover: autoTakeover,
+  );
   if (!isReady) {
     throw const WhatsappException(
       message: 'Connection failed: Main interface not ready',
@@ -104,85 +116,82 @@ Future<bool> waitForLogin(
   return true;
 }
 
-Future<bool> waitForInChat(WpClientInterface wpClient) async {
+/// Waits up to two minutes for the chat screen. One check at a time -- a
+/// slow check is never overlapped by the next one -- and a single page
+/// reload at 70s, after which WPP is injected again with the same version
+/// and config and the listeners are re-attached.
+Future<bool> waitForInChat(
+  WpClientInterface wpClient, {
+  String? wppVersion,
+  String? wppJsContent,
+  Map<String, dynamic>? wppConfig,
+  bool autoTakeover = true,
+}) async {
   final wppAuth = WppAuth(wpClient);
-  final readyCompleter = Completer<bool>();
-  var startTime = DateTime.now();
-  int seconds = 0;
-  bool reloaded = false;
-
-  // Listen for the ready event to complete immediately
-  wpClient.on(WhatsappEvent.connmainready, (_) {
-    if (!readyCompleter.isCompleted) readyCompleter.complete(true);
-  });
+  var readyEvent = false;
+  void onReady(dynamic _) => readyEvent = true;
 
   // Fast-track if already ready
-  if (await wppAuth.isMainReady()) {
-    wpClient.off(WhatsappEvent.connmainready);
-    return true;
-  }
+  if (await wppAuth.isMainReady()) return true;
+
+  await wpClient.on(WhatsappEvent.connmainready, onReady);
+  var startTime = DateTime.now();
+  bool reloaded = false;
 
   try {
-    // Polling as a fallback and for status updates
-    Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (readyCompleter.isCompleted) {
-        timer.cancel();
-        return;
-      }
-
-      seconds = DateTime.now().difference(startTime).inSeconds;
-
-      if (seconds >= 120) {
-        if (!readyCompleter.isCompleted) readyCompleter.complete(false);
-        timer.cancel();
-        return;
-      }
+    while (true) {
+      if (readyEvent) return true;
+      final seconds = DateTime.now().difference(startTime).inSeconds;
+      if (seconds >= 120) return false;
 
       try {
-        if (await wppAuth.isMainReady()) {
-          if (!readyCompleter.isCompleted) readyCompleter.complete(true);
-          return;
-        }
+        if (await wppAuth.isMainReady()) return true;
 
         final isLoaded = await wppAuth.isMainLoaded();
         final isSynced = await wppAuth.isSynced();
 
-        // If loaded and synced, or loaded and wait for a short period (10s instead of 25s)
+        // Loaded and synced, or loaded for long enough
         if (isLoaded && (isSynced || seconds > 10)) {
           WhatsappLogger.log(
               "Main identity ready (Early via Loaded: $isLoaded, Synced: $isSynced)");
-          if (!readyCompleter.isCompleted) readyCompleter.complete(true);
-          return;
+          return true;
         }
 
         if (seconds > 70 && !reloaded) {
           WhatsappLogger.log(
               "Connection seems stuck. Attempting a page reload for recovery...");
-          await wpClient.reload();
           reloaded = true;
-          // Reset timer after reload
-          startTime = DateTime.now();
+          await wpClient.reload();
           await Future.delayed(const Duration(seconds: 5));
-          await WppConnect.init(wpClient);
+          await WppConnect.init(
+            wpClient,
+            wppVersion: wppVersion,
+            wppJsContent: wppJsContent,
+            config: wppConfig,
+            autoTakeover: autoTakeover,
+          );
+          await wpClient.restoreListeners();
+          startTime = DateTime.now();
+          continue;
         }
 
-        if (seconds % 10 == 0) {
+        if (seconds > 0 && seconds % 10 == 0) {
           final isAuth = await wppAuth.isAuthenticated();
           if (!isAuth) {
             WhatsappLogger.log("Authentication lost while waiting for main.");
-            if (!readyCompleter.isCompleted) readyCompleter.complete(false);
-            return;
+            return false;
           }
           WhatsappLogger.log(
               "Waiting for main ready... (Auth: OK, Loaded: $isLoaded, Synced: $isSynced, Time: $seconds/120s)");
         }
       } catch (e) {
-        // Silent error in loop
+        WhatsappLogger.log("waitForInChat check failed: $e");
       }
-    });
-
-    return await readyCompleter.future;
+      await Future.delayed(const Duration(seconds: 1));
+    }
   } finally {
-    wpClient.off(WhatsappEvent.connmainready);
+    try {
+      await wpClient.off(WhatsappEvent.connmainready, onReady);
+    } catch (_) {}
   }
 }
