@@ -122,6 +122,26 @@ class WppConnect {
       "window.WPP.conn.setKeepAlive(true);",
       tryPromise: false,
     );
+    // WhatsApp now addresses people by LID. Sending to number@c.us for a
+    // number this session never looked up fails with "No LID for user", so
+    // every send resolves the number first: the lookup returns (and caches)
+    // the LID, and a number without WhatsApp fails with a clear message.
+    await wpClient.evaluateJs(
+      '''
+      window.__dragoResolve = async function(id) {
+        if (!id || typeof id !== 'string' || !id.endsWith('@c.us')) return id;
+        var query = window.WPP.contact.queryWidExists || window.WPP.contact.queryExists;
+        var found = await query(id);
+        if (!found) {
+          throw new Error('Not on WhatsApp: ' + id.replace('@c.us', ''));
+        }
+        var lid = found.lid ? (found.lid._serialized || String(found.lid)) : null;
+        var wid = found.wid ? (found.wid._serialized || String(found.wid)) : null;
+        return lid || wid || id;
+      };
+      ''',
+      tryPromise: false,
+    );
     // Set custom bot identifier
     await wpClient.evaluateJs(
       "window.WPP.config.poweredBy = 'Whatsapp-Bot-Flutter';",

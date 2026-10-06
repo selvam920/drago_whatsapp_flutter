@@ -306,6 +306,7 @@ class HomeController extends GetxController {
         useTemplate: true,
         templateTitle: "test title",
         templateFooter: "Footer",
+        // WhatsApp takes 1 to 3 buttons.
         buttons: [
           MessageButtons(
             text: "Phone number",
@@ -319,16 +320,6 @@ class HomeController extends GetxController {
           ),
           MessageButtons(
             text: "Button 1",
-            buttonData: "some button id",
-            buttonType: ButtonType.id,
-          ),
-          MessageButtons(
-            text: "Button 2",
-            buttonData: "some button id",
-            buttonType: ButtonType.id,
-          ),
-          MessageButtons(
-            text: "Button 3",
             buttonData: "some button id",
             buttonType: ButtonType.id,
           ),

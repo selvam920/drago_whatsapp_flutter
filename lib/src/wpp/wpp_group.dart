@@ -52,10 +52,22 @@ class WppGroup {
     return WhatsappChatSummary.parseList(result);
   }
 
-  /// To get all groups
+  /// To get all groups, as plain maps (see `WppChat.getChats`). [list] is
+  /// the typed version with admin/announce details.
   Future getAllGroups() async {
     return await wpClient.evaluateJs(
-      '''window.WPP.group.getAllGroups();''',
+      '''window.WPP.group.getAllGroups().then(function(groups) { return groups.map(function(c) {
+          return {
+            id: c.id && c.id._serialized ? c.id._serialized : String(c.id),
+            name: c.name || (c.groupMetadata && c.groupMetadata.subject) || c.formattedTitle || (c.contact && (c.contact.name || c.contact.pushname)) || '',
+            isGroup: !!c.isGroup,
+            isNewsletter: !!c.isNewsletter,
+            unreadCount: c.unreadCount || 0,
+            timestamp: c.t || 0,
+            archived: !!c.archive,
+            pinned: !!c.pin
+          };
+        }); })''',
       methodName: "getAllGroups",
       forceJsonParseResult: true,
     );

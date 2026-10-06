@@ -34,6 +34,14 @@ void main() {
       expect(3.jsParse, '3');
     });
 
+    test('sendTargetParse resolves numbers through the LID helper', () {
+      expect(
+        '98765 43210'.sendTargetParse,
+        '(window.__dragoResolve ? await window.__dragoResolve("9876543210@c.us")'
+        ' : "9876543210@c.us")',
+      );
+    });
+
     test('phoneParse is a quoted id', () {
       expect('98765 43210'.phoneParse, '"9876543210@c.us"');
     });

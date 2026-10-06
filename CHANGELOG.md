@@ -93,3 +93,8 @@
 - `isValidContact` returns the real result; file sends are queued and match only their own message; no file-name caption on images; status images keep their real MIME type.
 - Connection wait no longer overlaps checks, and re-injects WPP with the same version/config after its recovery reload.
 - Headless and embedded clients share one base class; event streams close on disconnect.
+
+## 0.3.1
+
+- Fix "No LID for user": sends to a phone number resolve it first (`contact.queryWidExists`), which looks up and caches its LID; a number without WhatsApp now fails with "Not on WhatsApp: <number>". Groups and channels pass through.
+- `chat.getChats` and `group.getAllGroups` return plain maps (`id`, `name`, `isGroup`, ...) instead of null.

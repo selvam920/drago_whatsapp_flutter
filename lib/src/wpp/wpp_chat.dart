@@ -15,6 +15,18 @@ class WppChat {
   static String _uniqueKey(String prefix) =>
       '${prefix}_${DateTime.now().microsecondsSinceEpoch}_${_keySeq++}';
 
+  /// WhatsApp rejects a template with no buttons or more than three
+  /// ("buttons_must_between_1_and_3_options"); say so before sending.
+  static void _checkButtons(List<MessageButtons>? buttons, bool useTemplate) {
+    final count = buttons?.length ?? 0;
+    if ((useTemplate || count > 0) && (count < 1 || count > 3)) {
+      throw WhatsappException(
+        message: 'A message takes 1 to 3 buttons, got $count',
+        exceptionType: WhatsappExceptionType.failedToSend,
+      );
+    }
+  }
+
   /// [sendMessage] may throw errors if passed an invalid contact
   /// returns [Message] object if sent successfully
   /// add `replyMessageId` to quote message
@@ -27,12 +39,13 @@ class WppChat {
     List<MessageButtons>? buttons,
     MessageId? replyMessageId,
   }) async {
+    _checkButtons(buttons, useTemplate);
     String? replyText = replyMessageId?.serialized;
     String? buttonsText = buttons != null
         ? jsonEncode(buttons.map((e) => e.toJson()).toList())
         : null;
     var result = await wpClient.evaluateJs(
-        '''window.WPP.chat.sendTextMessage(${phone.phoneParse}, ${message.jsParse}, {
+        '''window.WPP.chat.sendTextMessage(${phone.sendTargetParse}, ${message.jsParse}, {
             quotedMsg: ${replyText.jsParse},
             useTemplateButtons: ${useTemplate.jsParse},
             buttons:$buttonsText,
@@ -69,6 +82,7 @@ class WppChat {
     List<MessageButtons>? buttons,
     Duration timeout = const Duration(seconds: 120),
   }) {
+    _checkButtons(buttons, useTemplate);
     final previous = _fileSendQueue;
     final done = Completer<void>();
     _fileSendQueue = done.future;
@@ -233,7 +247,7 @@ class WppChat {
       (async function() {
         try {
           var fileObj = window['$blobKey'];
-          var chatId = ${phone.phoneParse};
+          var chatId = ${phone.sendTargetParse};
           var captionText = ${caption.jsParse};
 
           // Channels upload media differently; the high-level API handles it.
@@ -441,7 +455,7 @@ class WppChat {
     required String contactName,
   }) async {
     var result = await wpClient
-        .evaluateJs('''window.WPP.chat.sendVCardContactMessage(${phone.phoneParse}, {
+        .evaluateJs('''window.WPP.chat.sendVCardContactMessage(${phone.sendTargetParse}, {
             id: ${contactPhone.phoneParse},
             name: ${contactName.jsParse}
           });''', methodName: "sendContactCard");
@@ -458,7 +472,7 @@ class WppChat {
     String? url,
   }) async {
     var result = await wpClient
-        .evaluateJs('''window.WPP.chat.sendLocationMessage(${phone.phoneParse}, {
+        .evaluateJs('''window.WPP.chat.sendLocationMessage(${phone.sendTargetParse}, {
               lat: ${lat.jsParse},
               lng: ${long.jsParse},
               name: ${name.jsParse},
@@ -482,7 +496,7 @@ class WppChat {
   /// Returns false when the number has no WhatsApp account.
   Future<bool> isValidContact({required String phone}) async {
     final result = await wpClient.evaluateJs(
-      '''window.WPP.contact.queryExists(${phone.phoneParse}).then(function(r) { return !!r; })''',
+      '''(window.WPP.contact.queryWidExists || window.WPP.contact.queryExists)(${phone.phoneParse}).then(function(r) { return !!r; })''',
       methodName: "isValidContact",
     );
     return result == true;
@@ -541,7 +555,9 @@ class WppChat {
     return null;
   }
 
-  /// get all Chats using [getChats]
+  /// get all Chats using [getChats], as plain maps: `id`, `name`, `isGroup`,
+  /// `isNewsletter`, `unreadCount`, `timestamp`, `archived`, `pinned`.
+  /// (WhatsApp's own chat objects can't cross to Dart; they arrived as null.)
   Future getChats({
     bool onlyUser = false,
     bool onlyGroups = false,
@@ -550,7 +566,18 @@ class WppChat {
       '''window.WPP.chat.list({
             onlyUsers: ${onlyUser.jsParse},
             onlyGroups: ${onlyGroups.jsParse}
-         });''',
+         }).then(function(chats) { return chats.map(function(c) {
+          return {
+            id: c.id && c.id._serialized ? c.id._serialized : String(c.id),
+            name: c.name || (c.groupMetadata && c.groupMetadata.subject) || c.formattedTitle || (c.contact && (c.contact.name || c.contact.pushname)) || '',
+            isGroup: !!c.isGroup,
+            isNewsletter: !!c.isNewsletter,
+            unreadCount: c.unreadCount || 0,
+            timestamp: c.t || 0,
+            archived: !!c.archive,
+            pinned: !!c.pin
+          };
+        }); })''',
       methodName: "GetChats",
       forceJsonParseResult: true,
     );
@@ -692,7 +719,7 @@ class WppChat {
   }) async {
     String? serialized = messageId.serialized;
     var result = await wpClient.evaluateJs(
-        '''window.WPP.chat.forwardMessage(${phone.phoneParse}, ${serialized.jsParse}, {
+        '''window.WPP.chat.forwardMessage(${phone.sendTargetParse}, ${serialized.jsParse}, {
             displayCaptionText: $displayCaptionText,
             multicast: $multicast,
           });''',
@@ -745,7 +772,7 @@ class WppChat {
     String? jpegThumbnail,
   }) async {
     var result = await wpClient.evaluateJs(
-      '''window.WPP.chat.sendCatalogMessage(${phone.phoneParse}, ${catalogOwner.phoneParse}, {
+      '''window.WPP.chat.sendCatalogMessage(${phone.sendTargetParse}, ${catalogOwner.phoneParse}, {
             title: ${title.jsParse} || undefined,
             description: ${description.jsParse} || undefined,
             textMessage: ${textMessage.jsParse} || undefined,

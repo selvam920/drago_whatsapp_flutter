@@ -99,6 +99,14 @@ extension JsParser on dynamic {
   String get phoneParse => jsonEncode(parsePhone(this));
 
   String get groupParse => jsonEncode(parseGroup(this));
+
+  /// A JS expression (for use inside an async function) giving the chat to
+  /// send to: a phone number is resolved to its LID first, group and channel
+  /// ids pass through. See `window.__dragoResolve` in WppConnect.
+  String get sendTargetParse {
+    final id = phoneParse;
+    return '(window.__dragoResolve ? await window.__dragoResolve($id) : $id)';
+  }
 }
 
 /// Digits only, for a number typed with spaces, dashes, brackets or `+`.
