@@ -119,7 +119,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.2.1"
+    version: "0.3.0"
   fake_async:
     dependency: transitive
     description:
@@ -218,7 +218,7 @@ packages:
     description:
       path: flutter_inappwebview
       ref: HEAD
-      resolved-ref: f6f9c5075bf7d34e173fe21abe01deb30c19cfd7
+      resolved-ref: "38dff4769a516e77c42c45d506c98286661263d7"
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "6.2.0-beta.3"
@@ -227,7 +227,7 @@ packages:
     description:
       path: flutter_inappwebview_android
       ref: HEAD
-      resolved-ref: f6f9c5075bf7d34e173fe21abe01deb30c19cfd7
+      resolved-ref: "38dff4769a516e77c42c45d506c98286661263d7"
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "1.2.0-beta.3"
@@ -240,12 +240,13 @@ packages:
     source: hosted
     version: "1.3.0"
   flutter_inappwebview_ios:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: flutter_inappwebview_ios
-      sha256: ae8a78829398771be863aa3c8804a9d40728e1815e66c9c966f86d2cc3ae4fd9
-      url: "https://pub.dev"
-    source: hosted
+      path: flutter_inappwebview_ios
+      ref: HEAD
+      resolved-ref: "38dff4769a516e77c42c45d506c98286661263d7"
+      url: "https://github.com/selvam920/flutter_inappwebview"
+    source: git
     version: "1.2.0-beta.3"
   flutter_inappwebview_linux:
     dependency: transitive
@@ -256,37 +257,40 @@ packages:
     source: hosted
     version: "0.1.0-beta.1"
   flutter_inappwebview_macos:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: flutter_inappwebview_macos
-      sha256: "545148cb5c46475ce669ab21621e9f2ad66e05f8e80b2cf49d4018879ab52393"
-      url: "https://pub.dev"
-    source: hosted
+      path: flutter_inappwebview_macos
+      ref: HEAD
+      resolved-ref: "38dff4769a516e77c42c45d506c98286661263d7"
+      url: "https://github.com/selvam920/flutter_inappwebview"
+    source: git
     version: "1.2.0-beta.3"
   flutter_inappwebview_platform_interface:
     dependency: "direct overridden"
     description:
       path: flutter_inappwebview_platform_interface
       ref: HEAD
-      resolved-ref: f6f9c5075bf7d34e173fe21abe01deb30c19cfd7
+      resolved-ref: "38dff4769a516e77c42c45d506c98286661263d7"
       url: "https://github.com/selvam920/flutter_inappwebview"
     source: git
     version: "1.4.0-beta.3"
   flutter_inappwebview_web:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: flutter_inappwebview_web
-      sha256: e98b8875ccb6a3fd255873318db45c18ab135ed0ed22d20169abad9f5c810eb9
-      url: "https://pub.dev"
-    source: hosted
+      path: flutter_inappwebview_web
+      ref: HEAD
+      resolved-ref: "38dff4769a516e77c42c45d506c98286661263d7"
+      url: "https://github.com/selvam920/flutter_inappwebview"
+    source: git
     version: "1.2.0-beta.3"
   flutter_inappwebview_windows:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: flutter_inappwebview_windows
-      sha256: "902edd6f6326952af822e21aa928f7426d723d45c94c15e6ce3c2d5640d28ad7"
-      url: "https://pub.dev"
-    source: hosted
+      path: flutter_inappwebview_windows
+      ref: HEAD
+      resolved-ref: "38dff4769a516e77c42c45d506c98286661263d7"
+      url: "https://github.com/selvam920/flutter_inappwebview"
+    source: git
     version: "0.7.0-beta.3"
   flutter_lints:
     dependency: "direct dev"
