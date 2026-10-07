@@ -177,9 +177,19 @@ class DragoWhatsappFlutter {
      final availableVersion = await WebViewEnvironment.getAvailableVersion();
       assert(availableVersion != null,
            'Failed to find an installed WebView2 runtime or non-stable Microsoft Edge installation.');
-      environment= await WebViewEnvironment.create(
-          settings: WebViewEnvironmentSettings(
-              userDataFolder: sessionPath));
+      // WebView2 can fail transiently (e.g. "device is not ready" right after
+      // wake or while the runtime updates), so retry a few times.
+      for (var attempt = 1;; attempt++) {
+        try {
+          environment = await WebViewEnvironment.create(
+              settings: WebViewEnvironmentSettings(userDataFolder: sessionPath));
+          break;
+        } catch (e) {
+          if (attempt >= 3) rethrow;
+          WhatsappLogger.log('WebViewEnvironment.create failed ($attempt): $e');
+          await Future.delayed(Duration(milliseconds: 700 * attempt));
+        }
+      }
     }
 
     final headlessWebView = HeadlessInAppWebView(
@@ -261,7 +271,11 @@ class DragoWhatsappFlutter {
   static Future<void> clearSession({String? sessionPath}) async {
     try {
       if (sessionPath != null) {
-        Directory directory = Directory(sessionPath);
+        // On Windows only the WebView2 profile inside sessionPath is removed:
+        // callers have passed folders that also hold their own data.
+        Directory directory = Platform.isWindows
+            ? Directory('$sessionPath${Platform.pathSeparator}EBWebView')
+            : Directory(sessionPath);
         try {
           if (await directory.exists()) {
             await directory.delete(recursive: true);
