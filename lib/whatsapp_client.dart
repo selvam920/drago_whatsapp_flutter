@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:drago_whatsapp_flutter/src/inapp_webview_client_base.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:drago_inappwebview/drago_inappwebview.dart';
 
 /// Client over a [HeadlessInAppWebView] this package created and owns.
 class WhatsappFlutterClient extends InAppWebViewClientBase {

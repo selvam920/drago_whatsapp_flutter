@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_client.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_inapp_client.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:drago_inappwebview/drago_inappwebview.dart';
 import 'package:flutter/foundation.dart';
 
 class DragoWhatsappFlutter {

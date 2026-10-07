@@ -3,7 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  flutter_inappwebview_linux
+  drago_inappwebview
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:drago_inappwebview/drago_inappwebview.dart';
 
 /// Everything the headless and the embedded WebView clients do the same way.
 ///
@@ -158,7 +158,7 @@ abstract class InAppWebViewClientBase implements WpClientInterface {
       '''(function() {
         window.__dragoListeners = window.__dragoListeners || {};
         if (window.__dragoListeners[$e]) return;
-        var fn = function(data) { window.flutter_inappwebview.callHandler($name, data); };
+        var fn = function(data) { window.drago_inappwebview.callHandler($name, data); };
         window.__dragoListeners[$e] = fn;
         window.WPP.on($e, fn);
       })();''',
@@ -219,7 +219,7 @@ abstract class InAppWebViewClientBase implements WpClientInterface {
     await evaluateJs(
       '''
       (function() {
-          window.onCustomEvent = (eventName, data) => window.flutter_inappwebview.callHandler('onCustomEvent', {type: eventName, data: data});
+          window.onCustomEvent = (eventName, data) => window.drago_inappwebview.callHandler('onCustomEvent', {type: eventName, data: data});
           if (window.__dragoCustomEvents) return;
           window.__dragoCustomEvents = true;
           const events = [
