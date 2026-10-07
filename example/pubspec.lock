@@ -118,19 +118,10 @@ packages:
     description:
       path: drago_inappwebview
       ref: HEAD
-      resolved-ref: aeafb25c0ec6b58153743aa6946961cdb6ddd4a2
+      resolved-ref: "338ee7b7cd67cf5710484e04b2aafe7c8eaa110b"
       url: "https://github.com/selvam920/drago_inappwebview"
     source: git
-    version: "6.2.0-beta.3"
-  drago_inappwebview_internal_annotations:
-    dependency: transitive
-    description:
-      path: "dev_packages/drago_inappwebview_internal_annotations"
-      ref: aeafb25c0ec6b58153743aa6946961cdb6ddd4a2
-      resolved-ref: aeafb25c0ec6b58153743aa6946961cdb6ddd4a2
-      url: "https://github.com/selvam920/drago_inappwebview"
-    source: git
-    version: "1.3.0"
+    version: "7.0.0"
   drago_whatsapp_flutter:
     dependency: "direct main"
     description:
