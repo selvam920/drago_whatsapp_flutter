@@ -44,17 +44,84 @@ class WppChat {
     String? buttonsText = buttons != null
         ? jsonEncode(buttons.map((e) => e.toJson()).toList())
         : null;
-    var result = await wpClient.evaluateJs(
-        '''window.WPP.chat.sendTextMessage(${phone.sendTargetParse}, ${message.jsParse}, {
+    // The result comes back as a JSON string of plain fields, never WPP's own
+    // object: on Windows the value crosses through the DevTools protocol
+    // (returnByValue), which drops a result it can't serialise and the send
+    // then looked failed. The string is also kept on window in case the
+    // bridge loses it, and a JS error comes back as its message instead of
+    // an anonymous null.
+    final resultKey = _uniqueKey('__wpp_text_result');
+    final source = '''(async function() {
+        var out;
+        try {
+          var r = await window.WPP.chat.sendTextMessage(${phone.sendTargetParse}, ${message.jsParse}, {
             quotedMsg: ${replyText.jsParse},
             useTemplateButtons: ${useTemplate.jsParse},
             buttons:$buttonsText,
             title: ${templateTitle.jsParse},
             footer: ${templateFooter.jsParse}
-          });''',
-        methodName: "sendTextMessage");
+          });
+          var sendResult = r && r.sendMsgResult
+            ? (r.sendMsgResult.messageSendResult != null ? String(r.sendMsgResult.messageSendResult) : null)
+            : null;
+          out = {ok: true, sendResult: sendResult, data: r ? {
+            id: r.id != null ? String(r.id) : null,
+            ack: typeof r.ack === 'number' ? r.ack : null,
+            from: r.from != null ? String(r.from) : '',
+            to: r.to != null ? String(r.to) : ''
+          } : null};
+        } catch (err) {
+          out = {ok: false, error: err ? (err.message || String(err)) : 'Unknown error'};
+        }
+        out = JSON.stringify(out);
+        window['$resultKey'] = out;
+        return out;
+      })()''';
 
-    return Message.parse(result).firstOrNull;
+    dynamic raw;
+    try {
+      raw = await wpClient.evaluateJs(source, methodName: "sendTextMessage");
+      if (raw == null || raw.toString().isEmpty || raw == 'null') {
+        raw = await wpClient.evaluateJs(
+          'window["$resultKey"]',
+          tryPromise: false,
+        );
+      }
+    } finally {
+      await wpClient.evaluateJs(
+        'delete window["$resultKey"];',
+        tryPromise: false,
+      );
+    }
+    return _textSendResult(raw);
+  }
+
+  /// Reads [sendTextMessage]'s JSON reply: the message when WhatsApp took it,
+  /// a [WhatsappException] carrying WhatsApp's own reason when it didn't.
+  static Message? _textSendResult(dynamic raw) {
+    dynamic parsed = raw;
+    if (raw is String) {
+      try {
+        parsed = jsonDecode(raw);
+      } catch (_) {
+        return Message.parse(raw).firstOrNull;
+      }
+    }
+    if (parsed is! Map) return Message.parse(parsed).firstOrNull;
+    if (parsed['ok'] != true) {
+      throw WhatsappException(
+        message: parsed['error']?.toString() ?? 'Unknown error',
+        exceptionType: WhatsappExceptionType.failedToSend,
+      );
+    }
+    final sendResult = parsed['sendResult']?.toString();
+    if (sendResult != null && sendResult.isNotEmpty && sendResult != 'OK') {
+      throw WhatsappException(
+        message: 'WhatsApp refused the message ($sendResult)',
+        exceptionType: WhatsappExceptionType.failedToSend,
+      );
+    }
+    return Message.parse(parsed['data']).firstOrNull;
   }
 
   ///send file messages using [sendFileMessage]
@@ -285,7 +352,16 @@ class WppChat {
           else if (fileTypeName === 'audio') rawMediaOptions.isPtt = ${audioAsPtt.jsParse};
           else if (fileTypeName === 'image') rawMediaOptions.maxDimension = 1600;
 
-          var mediaPrep = window.WPP.whatsapp.MediaPrep.prepRawMedia(opaqueData, rawMediaOptions);
+          // WhatsApp moved prepRawMedia out of WAWebMediaPrep (wa-js 4.7.1
+          // binds it under whatsapp.functions); older wa-js keeps the old
+          // place.
+          var W = window.WPP.whatsapp;
+          var prepRawMedia = (W.functions && W.functions.prepRawMedia) ||
+            (W.MediaPrep && W.MediaPrep.prepRawMedia);
+          if (typeof prepRawMedia !== 'function') {
+            throw new Error('This WhatsApp Web needs a newer wa-js (prepRawMedia not found)');
+          }
+          var mediaPrep = prepRawMedia(opaqueData, rawMediaOptions);
           await mediaPrep.waitForPrep();
 
           // Build send options. No caption means none -- a document still
@@ -309,6 +385,20 @@ class WppChat {
             sendResultPromise = mediaPrep.sendToChat({ chat: chat, options: sendOptions });
           } else {
             sendResultPromise = mediaPrep.sendToChat(chat, sendOptions);
+          }
+
+          // Watch the send's own promise: a rejection or a non-OK result is
+          // WhatsApp saying no, and must not wait out the whole timeout.
+          var sendDone = false, sendValue = null, sendError = null;
+          Promise.resolve(sendResultPromise).then(function(v) {
+            sendDone = true;
+            sendValue = v;
+          }, function(e) {
+            sendError = e ? (e.message || String(e)) : 'send failed';
+          });
+          function refusal(v) {
+            var r = v && v.messageSendResult != null ? String(v.messageSendResult) : null;
+            return r && r !== 'OK' ? r : null;
           }
 
           // Poll for the new outgoing message (replaces broken on('add') listener)
@@ -345,25 +435,18 @@ class WppChat {
           }
 
           while (Date.now() - pollStart < maxPollMs) {
-            await new Promise(function(r) { setTimeout(r, 1500); });
-            try {
-              var raceResult = await Promise.race([
-                sendResultPromise,
-                new Promise(function(r) { setTimeout(function() { r('__still_pending__'); }, 200); })
-              ]);
-              if (raceResult !== '__still_pending__') {
-                // Look up the actual message from chat.msgs for full details.
-                await new Promise(function(r) { setTimeout(r, 500); });
-                var resolvedMsg = findSentMsg();
-                if (resolvedMsg) {
-                  window['$resultKey'] = JSON.stringify({ok: true, data: buildMsgResult(resolvedMsg)});
-                } else {
-                  window['$resultKey'] = JSON.stringify({ok: true, data: raceResult});
-                }
-                return;
-              }
-            } catch(sendErr) {
-              // sendResult rejected, continue polling
+            await new Promise(function(r) { setTimeout(r, 1000); });
+            if (sendError) throw new Error(sendError);
+            if (sendDone) {
+              var refused = refusal(sendValue);
+              if (refused) throw new Error('WhatsApp refused the file (' + refused + ')');
+              // Look up the actual message from chat.msgs for full details.
+              await new Promise(function(r) { setTimeout(r, 500); });
+              var resolvedMsg = findSentMsg();
+              window['$resultKey'] = JSON.stringify({ok: true, data: resolvedMsg
+                ? buildMsgResult(resolvedMsg)
+                : {ack: 1}});
+              return;
             }
 
             // Check for new fromMe messages in chat
@@ -373,10 +456,12 @@ class WppChat {
             }
           }
 
-          if (sentMsg) {
+          if (sentMsg && typeof sentMsg.ack === 'number' && sentMsg.ack < 0) {
+            window['$resultKey'] = JSON.stringify({ok: false, error: 'WhatsApp could not send the file (ack ' + sentMsg.ack + ')'});
+          } else if (sentMsg) {
             window['$resultKey'] = JSON.stringify({ok: true, data: buildMsgResult(sentMsg)});
           } else {
-            window['$resultKey'] = JSON.stringify({ok: false, error: 'sendFileMessage: message not confirmed within timeout'});
+            window['$resultKey'] = JSON.stringify({ok: false, error: 'WhatsApp did not confirm the file in time'});
           }
 
         } catch(err) {
@@ -424,7 +509,9 @@ class WppChat {
               final errorMsg = parsed['error']?.toString() ?? 'Unknown error';
               WhatsappLogger.log("sendFileMessage: error - $errorMsg");
               throw WhatsappException(
-                message: "sendFileMessage failed: $errorMsg",
+                // Shown to the counter as the reason, so WhatsApp's words only.
+                message: errorMsg,
+                details: 'sendFileMessage',
                 exceptionType: WhatsappExceptionType.failedToSend,
               );
             }

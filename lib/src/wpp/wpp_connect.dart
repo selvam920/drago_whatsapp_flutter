@@ -9,7 +9,10 @@ class WppConnect {
   /// The wa-js release used when the app names none. Pinned so an upstream
   /// release can't change every installation overnight; bump it after testing
   /// a new release. When this download fails the latest release is tried.
-  static const String defaultWppVersion = 'v4.6.1';
+  ///
+  /// v4.7.1 follows WhatsApp Web moving prepRawMedia out of WAWebMediaPrep,
+  /// which file sends depend on.
+  static const String defaultWppVersion = 'v4.7.1';
 
   static final Map<String, String> _cachedWppJs = {};
 
