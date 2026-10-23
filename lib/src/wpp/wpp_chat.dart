@@ -779,6 +779,54 @@ class WppChat {
     return result?.toString() ?? 'missing';
   }
 
+  /// Person chats this account only ever sent to: every loaded message is
+  /// ours, none is a document (bills, statements), and the chat is not
+  /// pinned or archived. The usual leftovers of a bulk send. Returns the
+  /// chat ids, for [deleteChats].
+  Future<List<String>> listOneWayChats({int maxChats = 2000}) async {
+    final result = await wpClient.evaluateJs(
+      '''(async function() {
+        var chats = await window.WPP.chat.list({onlyUsers: true, count: $maxChats});
+        var out = [];
+        for (var i = 0; i < chats.length; i++) {
+          var c = chats[i];
+          if (c.pin || c.archive) continue;
+          var id = c.id && c.id._serialized ? c.id._serialized : String(c.id);
+          var msgs = (await window.WPP.chat.getMessages(id, {count: 30})) || [];
+          var real = msgs.filter(function(m) {
+            return !m.isNotification && !/notification|e2e|gp2|protocol/.test(String(m.type || ''));
+          });
+          if (!real.length) continue;
+          var oneWay = real.every(function(m) {
+            var mine = m.id ? m.id.fromMe : m.fromMe;
+            return mine && m.type !== 'document';
+          });
+          if (oneWay) out.push(id);
+        }
+        return JSON.stringify(out);
+      })()''',
+      methodName: "listOneWayChats",
+    );
+    if (result == null) return const [];
+    final decoded = result is String ? jsonDecode(result) : result;
+    return [for (final id in decoded as List) id.toString()];
+  }
+
+  /// Deletes chats from this account only; returns how many went.
+  Future<int> deleteChats(List<String> chatIds) async {
+    var done = 0;
+    for (final id in chatIds) {
+      try {
+        await wpClient.evaluateJs(
+          '''window.WPP.chat.delete(${id.jsParse});''',
+          methodName: "deleteChat",
+        );
+        done++;
+      } catch (_) {}
+    }
+    return done;
+  }
+
   /// Download the base64 of a media message
   Future<Map<String, dynamic>?> downloadMedia({
     required MessageId messageId,
