@@ -740,6 +740,45 @@ class WppChat {
     );
   }
 
+  /// Clears a sent message off this account only (the customer keeps it), so
+  /// a bulk send does not fill the chat list. A chat that holds nothing but
+  /// this message is deleted; a chat with earlier history keeps it and loses
+  /// only this message. Waits up to [wait] for WhatsApp's server to take the
+  /// message first -- deleting before that can cancel the send.
+  ///
+  /// Returns `chat`, `message`, `pending` (server never took it, nothing
+  /// deleted) or `missing` (no longer loaded).
+  Future<String> deleteSentForMe({
+    required MessageId messageId,
+    Duration wait = const Duration(seconds: 15),
+  }) async {
+    final result = await wpClient.evaluateJs(
+      '''(async function() {
+        var msg = await window.WPP.chat.getMessageById(${messageId.serialized.jsParse});
+        if (!msg) return 'missing';
+        var tries = ${(wait.inMilliseconds / 500).ceil()};
+        while ((msg.ack == null || msg.ack < 1) && tries-- > 0) {
+          await new Promise(function(r) { setTimeout(r, 500); });
+        }
+        if (msg.ack == null || msg.ack < 1) return 'pending';
+        var remote = msg.id.remote;
+        var chatId = remote && remote._serialized ? remote._serialized : String(remote);
+        var msgs = await window.WPP.chat.getMessages(chatId, {count: 20});
+        var real = (msgs || []).filter(function(m) {
+          return !m.isNotification && !/notification|e2e|gp2|protocol/.test(String(m.type || ''));
+        });
+        if (real.length <= 1) {
+          await window.WPP.chat.delete(chatId);
+          return 'chat';
+        }
+        await window.WPP.chat.deleteMessage(chatId, ${messageId.serialized.jsParse}, true, false);
+        return 'message';
+      })()''',
+      methodName: "deleteSentForMe",
+    );
+    return result?.toString() ?? 'missing';
+  }
+
   /// Download the base64 of a media message
   Future<Map<String, dynamic>?> downloadMedia({
     required MessageId messageId,
