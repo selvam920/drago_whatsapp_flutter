@@ -1,6 +1,7 @@
 // Thanks to https://github.com/wppconnect-team/wa-js
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
@@ -21,13 +22,96 @@ class WppConnect {
       ? "https://github.com/wppconnect-team/wa-js/releases/latest/download/wppconnect-wa.js"
       : "https://github.com/wppconnect-team/wa-js/releases/download/$version/wppconnect-wa.js";
 
-  static Future<String> _fetchWppJs(String version) async {
+  /// Downloads are kept in `sessionPath/wajs` so a restart doesn't download
+  /// again and an offline PC still connects. A pinned release never changes,
+  /// so its saved copy is used as-is; 'latest' always tries the download
+  /// first and falls back to the saved copy.
+  static File? _diskFile(String? cacheDir, String version) {
+    if (cacheDir == null || cacheDir.isEmpty) return null;
+    final name = version.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    return File('$cacheDir${Platform.pathSeparator}wajs'
+        '${Platform.pathSeparator}$name.js');
+  }
+
+  /// GitHub's release hosts. Only these skip the certificate check, and only
+  /// after a normal download failed on it.
+  static const _scriptHosts = {
+    'github.com',
+    'objects.githubusercontent.com',
+    'release-assets.githubusercontent.com',
+  };
+
+  /// Downloads the release. A PC whose antivirus re-signs HTTPS (or has old
+  /// root certificates) fails the certificate check; the script is then
+  /// fetched again without it, from GitHub hosts only, so the bot still
+  /// connects. The rest of the app keeps full certificate checks.
+  static Future<String> _download(String version) async {
+    final uri = Uri.parse(_releaseUrl(version));
+    try {
+      return await http.read(uri).timeout(const Duration(seconds: 30));
+    } on HandshakeException catch (e) {
+      WhatsappLogger.log("wa-js certificate check failed ($e), "
+          "retrying without it for GitHub only");
+    } on http.ClientException catch (e) {
+      if (!e.message.contains('CERTIFICATE_VERIFY_FAILED') &&
+          !e.message.contains('HandshakeException')) {
+        rethrow;
+      }
+      WhatsappLogger.log("wa-js certificate check failed ($e), "
+          "retrying without it for GitHub only");
+    }
+    final client = HttpClient()
+      ..badCertificateCallback =
+          (cert, host, port) => _scriptHosts.contains(host.toLowerCase());
+    try {
+      final req = await client.getUrl(uri);
+      final res = await req.close().timeout(const Duration(seconds: 30));
+      if (res.statusCode != 200) {
+        throw HttpException('wa-js download returned ${res.statusCode}',
+            uri: uri);
+      }
+      return await res.transform(utf8.decoder).join();
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static Future<String?> _readDisk(File? file) async {
+    try {
+      if (file == null || !await file.exists()) return null;
+      final content = await file.readAsString();
+      return content.length > 1000 ? content : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String> _fetchWppJs(String version, {String? cacheDir}) async {
     final cached = _cachedWppJs[version];
     if (cached != null) return cached;
-    final content = await http
-        .read(Uri.parse(_releaseUrl(version)))
-        .timeout(const Duration(seconds: 30));
+    final file = _diskFile(cacheDir, version);
+    if (version != 'latest') {
+      final saved = await _readDisk(file);
+      if (saved != null) return _cachedWppJs[version] = saved;
+    }
+    String content;
+    try {
+      content = await _download(version);
+    } catch (_) {
+      final saved = await _readDisk(file);
+      if (saved == null) rethrow;
+      WhatsappLogger.log("wa-js $version download failed, using saved copy");
+      return _cachedWppJs[version] = saved;
+    }
     _cachedWppJs[version] = content;
+    if (file != null) {
+      try {
+        await file.parent.create(recursive: true);
+        await file.writeAsString(content);
+      } catch (e) {
+        WhatsappLogger.log("Could not save wa-js copy ($e)");
+      }
+    }
     return content;
   }
 
@@ -87,7 +171,7 @@ class WppConnect {
           content = wppJsContent;
         } else {
           try {
-            content = await _fetchWppJs(version);
+            content = await _fetchWppJs(version, cacheDir: wpClient.sessionPath);
           } catch (e) {
             WhatsappLogger.log("wa-js $version download failed ($e)");
             // A PC whose certificate store can't verify GitHub (antivirus
@@ -96,7 +180,8 @@ class WppConnect {
             content = await _bundledWppJs(version) ??
                 (version == 'latest'
                     ? throw e
-                    : await _fetchWppJs('latest'));
+                    : await _fetchWppJs('latest',
+                        cacheDir: wpClient.sessionPath));
           }
         }
 
