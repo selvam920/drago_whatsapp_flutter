@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 
@@ -28,6 +29,21 @@ class WppConnect {
         .timeout(const Duration(seconds: 30));
     _cachedWppJs[version] = content;
     return content;
+  }
+
+  /// The copy of [defaultWppVersion] bundled in assets/. Used for the default
+  /// or 'latest' version only, never in place of another pinned release.
+  static Future<String?> _bundledWppJs(String version) async {
+    if (version != defaultWppVersion && version != 'latest') return null;
+    try {
+      final content = await rootBundle.loadString(
+          'packages/drago_whatsapp_flutter/assets/wppconnect-wa.js');
+      WhatsappLogger.log("Using bundled wa-js $defaultWppVersion");
+      return content;
+    } catch (e) {
+      WhatsappLogger.log("Bundled wa-js not available ($e)");
+      return null;
+    }
   }
 
   /// make sure to call [init] to Initialize Wpp
@@ -73,10 +89,14 @@ class WppConnect {
           try {
             content = await _fetchWppJs(version);
           } catch (e) {
-            if (version == 'latest') rethrow;
-            WhatsappLogger.log(
-                "wa-js $version download failed ($e), trying latest release...");
-            content = await _fetchWppJs('latest');
+            WhatsappLogger.log("wa-js $version download failed ($e)");
+            // A PC whose certificate store can't verify GitHub (antivirus
+            // HTTPS scanning, old root certificates) fails every download;
+            // the pinned release ships with the package for that case.
+            content = await _bundledWppJs(version) ??
+                (version == 'latest'
+                    ? throw e
+                    : await _fetchWppJs('latest'));
           }
         }
 
