@@ -246,9 +246,8 @@ class DragoWhatsappFlutter {
           JsPromptResponse(action: JsPromptResponseAction.CONFIRM),
     );
 
-    await headlessWebView.run();
-
     try {
+      await headlessWebView.run();
       final controller = await completer.future.timeout(
         const Duration(seconds: 120),
         onTimeout: () => throw const WhatsappException(
@@ -260,9 +259,13 @@ class DragoWhatsappFlutter {
       return WhatsappFlutterClient(
         controller: controller,
         headlessInAppWebView: headlessWebView,
+        environment: environment,
       );
     } catch (e) {
       await headlessWebView.dispose();
+      // The environment holds the browser process; a failed start must not
+      // leave it running.
+      await environment?.dispose();
       rethrow;
     }
   }
