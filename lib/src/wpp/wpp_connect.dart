@@ -26,7 +26,31 @@ class WppConnect {
   /// and a reload drops the injected wa-js -- every send then failed with
   /// "Cannot read properties of undefined (reading 'chat')" until the bot
   /// was reconnected. Re-injects when `window.WPP` is gone or not ready.
-  static Future<void> ensureReady(WpClientInterface wpClient) async {
+  /// One re-injection at a time per client: the watchdog and sends racing
+  /// on a missing WPP used to inject wa-js twice.
+  static final Expando<Future<void>> _ensuring = Expando('wppEnsuring');
+
+  /// A logout is reported once per unlink (cleared by [markLinked]).
+  static final Expando<bool> _logoutReported = Expando('wppLogoutReported');
+
+  static Future<void> ensureReady(WpClientInterface wpClient) {
+    final running = _ensuring[wpClient];
+    if (running != null) return running;
+    final run = _ensureReady(wpClient);
+    _ensuring[wpClient] = run;
+    return run.whenComplete(() => _ensuring[wpClient] = null);
+  }
+
+  static Future<void> _ensureReady(WpClientInterface wpClient) async {
+    if (!wpClient.isConnected()) {
+      // Disconnected: fail now instead of injecting into nothing and
+      // waiting out the 60 s ready timeout.
+      throw const WhatsappException(
+        exceptionType: WhatsappExceptionType.clientNotConnected,
+        message:
+            'WhatsApp is not connected. Reconnect it in WhatsApp settings.',
+      );
+    }
     final ok = await wpClient.evaluateJs(
       "typeof window.WPP !== 'undefined' && !!window.WPP.isReady && "
       "!!window.WPP.chat;",
@@ -82,8 +106,15 @@ class WppConnect {
     }
   }
 
-  /// Sends the logout connection event through the normal event path.
+  /// The device is linked again: a later unlink is reported anew.
+  static void markLinked(WpClientInterface wpClient) =>
+      _logoutReported[wpClient] = null;
+
+  /// Sends the logout connection event through the normal event path, once
+  /// per unlink however many sends and checks notice it.
   static Future<void> reportLogout(WpClientInterface wpClient) async {
+    if (_logoutReported[wpClient] == true) return;
+    _logoutReported[wpClient] = true;
     try {
       await wpClient.evaluateJs(
         "if (typeof window.onCustomEvent === 'function') "

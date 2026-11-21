@@ -47,11 +47,10 @@ class WhatsappClient {
 
   Timer? _watchdog;
   bool _checking = false;
-  bool _loggedOutReported = false;
 
-  /// Seen linked at least once: before that, "not logged in" is first-time
-  /// pairing (QR on screen), not a logout.
-  bool _wasLinked = false;
+  /// connect() only builds the client once logged in, so it starts linked:
+  /// a "not logged in" on the first tick is an unlink, not QR pairing.
+  bool _wasLinked = true;
 
   /// WhatsApp can unlink this device at any time (phone offline ~14 days,
   /// removed under Linked devices, a security check), and WhatsApp Web
@@ -64,6 +63,7 @@ class WhatsappClient {
     _checking = true;
     try {
       var state = await WppConnect.linkState(wpClient);
+      if (_watchdog == null || !isConnected) return;
       if (state == WppLinkState.gone) {
         try {
           await WppConnect.ensureReady(wpClient);
@@ -71,16 +71,15 @@ class WhatsappClient {
           // ensureReady reports a logout itself; anything else is retried
           // on the next tick.
         }
+        if (_watchdog == null || !isConnected) return;
         state = await WppConnect.linkState(wpClient);
       }
-      if (state == WppLinkState.loggedOut &&
-          _wasLinked &&
-          !_loggedOutReported) {
-        _loggedOutReported = true;
+      if (state == WppLinkState.loggedOut && _wasLinked) {
+        // Deduped in reportLogout, together with ensureReady's own report.
         await WppConnect.reportLogout(wpClient);
       } else if (state == WppLinkState.linked) {
         _wasLinked = true;
-        _loggedOutReported = false;
+        WppConnect.markLinked(wpClient);
       }
     } catch (e) {
       WhatsappLogger.log("link check failed: $e");
@@ -136,7 +135,17 @@ class WhatsappClient {
     _watchdog = null;
     try {
       if (tryLogout) await logout();
+    } catch (e) {
+      WhatsappLogger.log(e);
+    }
+    try {
       await wpClient.dispose();
+    } catch (e) {
+      WhatsappLogger.log(e);
+    }
+    // Its own try: a WebView that fails to dispose must not leave the event
+    // streams open.
+    try {
       await _wppEvents.dispose();
     } catch (e) {
       WhatsappLogger.log(e);

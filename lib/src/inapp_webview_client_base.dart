@@ -221,7 +221,6 @@ abstract class InAppWebViewClientBase implements WpClientInterface {
       (function() {
           window.onCustomEvent = (eventName, data) => window.drago_inappwebview.callHandler('onCustomEvent', {type: eventName, data: data});
           if (window.__dragoCustomEvents) return;
-          window.__dragoCustomEvents = true;
           const events = [
             '${WhatsappEvent.connauthenticated}',
             '${WhatsappEvent.connlogout}',
@@ -251,6 +250,9 @@ abstract class InAppWebViewClientBase implements WpClientInterface {
                // ignore
             }
           });
+          // Set last: a WPP.on that throws half way (WPP not quite ready after
+          // a reload) must leave the next restoreListeners free to try again.
+          window.__dragoCustomEvents = true;
       })()
       ''',
       tryPromise: false,

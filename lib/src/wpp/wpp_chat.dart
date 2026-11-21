@@ -81,7 +81,15 @@ class WppChat {
 
     dynamic raw;
     try {
-      raw = await wpClient.evaluateJs(source, methodName: "sendTextMessage");
+      try {
+        // WPP's sendTextMessage can hang on some WebView2 setups (the same
+        // msgs.on('add') that file sends had to bypass): never wait forever.
+        raw = await wpClient
+            .evaluateJs(source, methodName: "sendTextMessage")
+            .timeout(const Duration(seconds: 60));
+      } on TimeoutException {
+        raw = null;
+      }
       if (raw == null || raw.toString().isEmpty || raw == 'null') {
         raw = await wpClient.evaluateJs(
           'window["$resultKey"]',
@@ -89,9 +97,23 @@ class WppChat {
         );
       }
     } finally {
-      await wpClient.evaluateJs(
-        'delete window["$resultKey"];',
-        tryPromise: false,
+      try {
+        await wpClient.evaluateJs(
+          'delete window["$resultKey"];',
+          tryPromise: false,
+        );
+      } catch (_) {
+        // Cleanup only: never hide the send's own error.
+      }
+    }
+    if (raw == null || raw.toString().isEmpty || raw == 'null') {
+      // No answer is not a refusal: it may still go. A timeout, so callers
+      // say "check the chat" instead of resending it twice.
+      throw const WhatsappException(
+        message: 'WhatsApp did not answer in time. It may still arrive -- '
+            'check the chat before sending again.',
+        details: 'sendTextMessage',
+        exceptionType: WhatsappExceptionType.timeout,
       );
     }
     return _textSendResult(raw);
@@ -155,7 +177,7 @@ class WppChat {
     final done = Completer<void>();
     _fileSendQueue = done.future;
     return previous
-        .then((_) => _sendFileMessage(
+        .then((_) => _sendFileMessageCleaned(
               phone: phone,
               fileType: fileType,
               fileBytes: fileBytes,
@@ -172,6 +194,55 @@ class WppChat {
               timeout: timeout,
             ))
         .whenComplete(done.complete);
+  }
+
+  /// [_sendFileMessage], plus cleanup of the injected bytes when it fails
+  /// BEFORE its own polling try (a chunk eval failing half way through a big
+  /// video used to leave tens of MB on window).
+  Future<Message?> _sendFileMessageCleaned({
+    required String phone,
+    required WhatsappFileType fileType,
+    required List<int> fileBytes,
+    String? fileName,
+    String? caption,
+    String? mimetype,
+    MessageId? replyMessageId,
+    String? templateTitle,
+    String? templateFooter,
+    bool useTemplate = false,
+    bool isViewOnce = false,
+    bool audioAsPtt = false,
+    List<MessageButtons>? buttons,
+    required Duration timeout,
+  }) async {
+    try {
+      return await _sendFileMessage(
+        phone: phone,
+        fileType: fileType,
+        fileBytes: fileBytes,
+        fileName: fileName,
+        caption: caption,
+        mimetype: mimetype,
+        replyMessageId: replyMessageId,
+        templateTitle: templateTitle,
+        templateFooter: templateFooter,
+        useTemplate: useTemplate,
+        isViewOnce: isViewOnce,
+        audioAsPtt: audioAsPtt,
+        buttons: buttons,
+        timeout: timeout,
+      );
+    } catch (_) {
+      try {
+        await wpClient.evaluateJs(
+          "delete window.__wpp_byte_chunks; delete window.__wpp_file_data; "
+          "Object.keys(window).forEach(function(k) { "
+          "if (k.indexOf('__wpp_file_blob') === 0) delete window[k]; });",
+          tryPromise: false,
+        );
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   Future<Message?> _sendFileMessage({
@@ -527,14 +598,23 @@ class WppChat {
         "sendFileMessage: TIMEOUT after ${timeout.inSeconds}s",
       );
       throw WhatsappException(
-        message: "sendFileMessage timed out after ${timeout.inSeconds}s",
-        exceptionType: WhatsappExceptionType.failedToSend,
+        // The upload may still finish in WhatsApp: a timeout, not a failure,
+        // so nobody resends blindly and the customer gets it twice.
+        message: 'WhatsApp did not confirm the file in '
+            '${timeout.inSeconds}s. It may still arrive -- check the chat '
+            'before sending again.',
+        details: 'sendFileMessage',
+        exceptionType: WhatsappExceptionType.timeout,
       );
     } finally {
-      await wpClient.evaluateJs(
-        'delete window["$resultKey"]; delete window.__wpp_file_data; delete window["$blobKey"];',
-        tryPromise: false,
-      );
+      try {
+        await wpClient.evaluateJs(
+          'delete window["$resultKey"]; delete window.__wpp_file_data; delete window["$blobKey"];',
+          tryPromise: false,
+        );
+      } catch (_) {
+        // Cleanup only: never hide the send's own error.
+      }
     }
   }
 
