@@ -52,12 +52,18 @@ class WhatsappClient {
   /// a "not logged in" on the first tick is an unlink, not QR pairing.
   bool _wasLinked = true;
 
+  /// [ConnectionEvent.disconnected] was reported and not yet undone.
+  bool _offlineReported = false;
+
   /// WhatsApp can unlink this device at any time (phone offline ~14 days,
   /// removed under Linked devices, a security check), and WhatsApp Web
   /// reloads its page when it updates. Either one used to go unseen until a
   /// send failed: a reload drops wa-js and every listener, and a logout then
   /// raises no event at all. So the link is checked here: wa-js is put back
   /// when gone, and a logout is reported once as [ConnectionEvent.logout].
+  /// A lost connection (no internet, phone unreachable) is reported once as
+  /// [ConnectionEvent.disconnected], and its return as
+  /// [ConnectionEvent.connected], so apps queue sends meanwhile.
   Future<void> _checkLink() async {
     if (_checking || !isConnected) return;
     _checking = true;
@@ -77,9 +83,18 @@ class WhatsappClient {
       if (state == WppLinkState.loggedOut && _wasLinked) {
         // Deduped in reportLogout, together with ensureReady's own report.
         await WppConnect.reportLogout(wpClient);
+      } else if (state == WppLinkState.offline) {
+        if (!_offlineReported) {
+          _offlineReported = true;
+          await WppConnect.reportEvent(wpClient, 'disconnected');
+        }
       } else if (state == WppLinkState.linked) {
         _wasLinked = true;
         WppConnect.markLinked(wpClient);
+        if (_offlineReported) {
+          _offlineReported = false;
+          await WppConnect.reportEvent(wpClient, 'connected');
+        }
       }
     } catch (e) {
       WhatsappLogger.log("link check failed: $e");

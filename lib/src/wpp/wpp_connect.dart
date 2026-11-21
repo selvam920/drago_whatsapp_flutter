@@ -91,7 +91,13 @@ class WppConnect {
       final r = await wpClient.evaluateJs(
         """(function() {
           if (typeof window.WPP === 'undefined' || !window.WPP.conn) return 'gone';
-          try { return window.WPP.conn.isAuthenticated() ? 'ok' : 'out'; }
+          try {
+            if (!window.WPP.conn.isAuthenticated()) return 'out';
+            // Linked but the socket is down (PC or phone offline).
+            if (typeof window.WPP.conn.isOnline === 'function' &&
+                window.WPP.conn.isOnline() === false) return 'offline';
+            return 'ok';
+          }
           catch (e) { return 'gone'; }
         })()""",
         tryPromise: false,
@@ -99,11 +105,27 @@ class WppConnect {
       return switch (r?.toString()) {
         'ok' => WppLinkState.linked,
         'out' => WppLinkState.loggedOut,
+        'offline' => WppLinkState.offline,
         _ => WppLinkState.gone,
       };
     } catch (_) {
       return WppLinkState.gone;
     }
+  }
+
+  /// Sends a connection event ([ConnectionEvent] name) through the normal
+  /// event path.
+  static Future<void> reportEvent(
+    WpClientInterface wpClient,
+    String event,
+  ) async {
+    try {
+      await wpClient.evaluateJs(
+        "if (typeof window.onCustomEvent === 'function') "
+        "window.onCustomEvent('connectionEvent', '$event');",
+        tryPromise: false,
+      );
+    } catch (_) {}
   }
 
   /// The device is linked again: a later unlink is reported anew.
@@ -478,4 +500,12 @@ class _InitArgs {
 }
 
 /// See [WppConnect.linkState].
-enum WppLinkState { linked, loggedOut, gone }
+enum WppLinkState {
+  linked,
+  loggedOut,
+
+  /// Linked, but WhatsApp's connection is down (no internet on the PC, or
+  /// the phone unreachable). Sends would only wait out their timeout.
+  offline,
+  gone,
+}
