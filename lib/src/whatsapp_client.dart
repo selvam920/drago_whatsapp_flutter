@@ -39,6 +39,54 @@ class WhatsappClient {
         WhatsappLogger.log("WppEvents init failed: $e");
       });
     }
+    _watchdog = Timer.periodic(watchInterval, (_) => _checkLink());
+  }
+
+  /// How often the link is checked while the bot runs.
+  static const Duration watchInterval = Duration(seconds: 45);
+
+  Timer? _watchdog;
+  bool _checking = false;
+  bool _loggedOutReported = false;
+
+  /// Seen linked at least once: before that, "not logged in" is first-time
+  /// pairing (QR on screen), not a logout.
+  bool _wasLinked = false;
+
+  /// WhatsApp can unlink this device at any time (phone offline ~14 days,
+  /// removed under Linked devices, a security check), and WhatsApp Web
+  /// reloads its page when it updates. Either one used to go unseen until a
+  /// send failed: a reload drops wa-js and every listener, and a logout then
+  /// raises no event at all. So the link is checked here: wa-js is put back
+  /// when gone, and a logout is reported once as [ConnectionEvent.logout].
+  Future<void> _checkLink() async {
+    if (_checking || !isConnected) return;
+    _checking = true;
+    try {
+      var state = await WppConnect.linkState(wpClient);
+      if (state == WppLinkState.gone) {
+        try {
+          await WppConnect.ensureReady(wpClient);
+        } catch (_) {
+          // ensureReady reports a logout itself; anything else is retried
+          // on the next tick.
+        }
+        state = await WppConnect.linkState(wpClient);
+      }
+      if (state == WppLinkState.loggedOut &&
+          _wasLinked &&
+          !_loggedOutReported) {
+        _loggedOutReported = true;
+        await WppConnect.reportLogout(wpClient);
+      } else if (state == WppLinkState.linked) {
+        _wasLinked = true;
+        _loggedOutReported = false;
+      }
+    } catch (e) {
+      WhatsappLogger.log("link check failed: $e");
+    } finally {
+      _checking = false;
+    }
   }
 
   /// To list to any event from WPP
@@ -84,6 +132,8 @@ class WhatsappClient {
   Future<void> disconnect({
     bool tryLogout = false,
   }) async {
+    _watchdog?.cancel();
+    _watchdog = null;
     try {
       if (tryLogout) await logout();
       await wpClient.dispose();

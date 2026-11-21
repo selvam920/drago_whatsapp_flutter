@@ -32,17 +32,65 @@ class WppConnect {
       "!!window.WPP.chat;",
       tryPromise: false,
     );
-    if (ok == true || ok?.toString() == 'true') return;
-    WhatsappLogger.log(
-        'WPP missing before send (page reloaded?), injecting again');
-    final args = _initArgs[wpClient] ?? const _InitArgs();
-    await init(
-      wpClient,
-      wppJsContent: args.wppJsContent,
-      wppVersion: args.wppVersion,
-      config: args.config,
-      autoTakeover: args.autoTakeover,
-    );
+    if (ok != true && ok?.toString() != 'true') {
+      WhatsappLogger.log(
+        'WPP missing before send (page reloaded?), injecting again',
+      );
+      final args = _initArgs[wpClient] ?? const _InitArgs();
+      await init(
+        wpClient,
+        wppJsContent: args.wppJsContent,
+        wppVersion: args.wppVersion,
+        config: args.config,
+        autoTakeover: args.autoTakeover,
+      );
+      // The reload dropped the JS side of every listener too -- without
+      // this a later logout from the phone never reached the app.
+      await wpClient.restoreListeners();
+    }
+    if (await linkState(wpClient) == WppLinkState.loggedOut) {
+      // WhatsApp unlinked this device (phone offline ~14 days, removed
+      // under Linked devices, a security check). Tell the app, so it shows
+      // the QR again, and fail the send in plain words.
+      await reportLogout(wpClient);
+      throw const WhatsappException(
+        exceptionType: WhatsappExceptionType.unAuthorized,
+        message: 'WhatsApp is logged out on this device. '
+            'Open WhatsApp settings and scan the QR code again.',
+      );
+    }
+  }
+
+  /// Is the WhatsApp Web page linked, logged out, or without wa-js (gone)?
+  static Future<WppLinkState> linkState(WpClientInterface wpClient) async {
+    try {
+      final r = await wpClient.evaluateJs(
+        """(function() {
+          if (typeof window.WPP === 'undefined' || !window.WPP.conn) return 'gone';
+          try { return window.WPP.conn.isAuthenticated() ? 'ok' : 'out'; }
+          catch (e) { return 'gone'; }
+        })()""",
+        tryPromise: false,
+      );
+      return switch (r?.toString()) {
+        'ok' => WppLinkState.linked,
+        'out' => WppLinkState.loggedOut,
+        _ => WppLinkState.gone,
+      };
+    } catch (_) {
+      return WppLinkState.gone;
+    }
+  }
+
+  /// Sends the logout connection event through the normal event path.
+  static Future<void> reportLogout(WpClientInterface wpClient) async {
+    try {
+      await wpClient.evaluateJs(
+        "if (typeof window.onCustomEvent === 'function') "
+        "window.onCustomEvent('connectionEvent', 'logout');",
+        tryPromise: false,
+      );
+    } catch (_) {}
   }
 
   static String _releaseUrl(String version) => version == 'latest'
@@ -397,3 +445,6 @@ class _InitArgs {
   final Map<String, dynamic>? config;
   final bool autoTakeover;
 }
+
+/// See [WppConnect.linkState].
+enum WppLinkState { linked, loggedOut, gone }
