@@ -18,6 +18,33 @@ class WppConnect {
 
   static final Map<String, String> _cachedWppJs = {};
 
+  /// What each client was last initialised with, so [ensureReady] can put
+  /// wa-js back the same way after WhatsApp Web reloads its page.
+  static final Expando<_InitArgs> _initArgs = Expando('wppInitArgs');
+
+  /// Before a send: WhatsApp Web reloads itself (updates, a stuck socket),
+  /// and a reload drops the injected wa-js -- every send then failed with
+  /// "Cannot read properties of undefined (reading 'chat')" until the bot
+  /// was reconnected. Re-injects when `window.WPP` is gone or not ready.
+  static Future<void> ensureReady(WpClientInterface wpClient) async {
+    final ok = await wpClient.evaluateJs(
+      "typeof window.WPP !== 'undefined' && !!window.WPP.isReady && "
+      "!!window.WPP.chat;",
+      tryPromise: false,
+    );
+    if (ok == true || ok?.toString() == 'true') return;
+    WhatsappLogger.log(
+        'WPP missing before send (page reloaded?), injecting again');
+    final args = _initArgs[wpClient] ?? const _InitArgs();
+    await init(
+      wpClient,
+      wppJsContent: args.wppJsContent,
+      wppVersion: args.wppVersion,
+      config: args.config,
+      autoTakeover: args.autoTakeover,
+    );
+  }
+
   static String _releaseUrl(String version) => version == 'latest'
       ? "https://github.com/wppconnect-team/wa-js/releases/latest/download/wppconnect-wa.js"
       : "https://github.com/wppconnect-team/wa-js/releases/download/$version/wppconnect-wa.js";
@@ -143,6 +170,12 @@ class WppConnect {
     Map<String, dynamic>? config,
     bool autoTakeover = true,
   }) async {
+    _initArgs[wpClient] = _InitArgs(
+      wppJsContent: wppJsContent,
+      wppVersion: wppVersion,
+      config: config,
+      autoTakeover: autoTakeover,
+    );
     final version = (wppVersion != null && wppVersion.isNotEmpty)
         ? wppVersion
         : defaultWppVersion;
@@ -156,22 +189,27 @@ class WppConnect {
 
     if (isWppPresent != true && isWppPresent?.toString() != "true") {
       // Check if we are on the correct page before injection
-      final currentUrl = await wpClient.evaluateJs("window.location.href", tryPromise: false);
-      if (currentUrl != null && !currentUrl.toString().contains("web.whatsapp.com")) {
-        WhatsappLogger.log("Not on WhatsApp Web page ($currentUrl), loading ${WhatsAppMetadata.whatsAppURL}...");
+      final currentUrl =
+          await wpClient.evaluateJs("window.location.href", tryPromise: false);
+      if (currentUrl != null &&
+          !currentUrl.toString().contains("web.whatsapp.com")) {
+        WhatsappLogger.log(
+            "Not on WhatsApp Web page ($currentUrl), loading ${WhatsAppMetadata.whatsAppURL}...");
         await wpClient.loadUrl(WhatsAppMetadata.whatsAppURL);
         // Wait for page load
         await Future.delayed(const Duration(seconds: 5));
       }
 
-      WhatsappLogger.log("WPP not found, fetching and injecting script content...");
+      WhatsappLogger.log(
+          "WPP not found, fetching and injecting script content...");
       try {
         String content;
         if (wppJsContent != null) {
           content = wppJsContent;
         } else {
           try {
-            content = await _fetchWppJs(version, cacheDir: wpClient.sessionPath);
+            content =
+                await _fetchWppJs(version, cacheDir: wpClient.sessionPath);
           } catch (e) {
             WhatsappLogger.log("wa-js $version download failed ($e)");
             // A PC whose certificate store can't verify GitHub (antivirus
@@ -187,8 +225,9 @@ class WppConnect {
 
         // Inject the library as a string
         await wpClient.injectJs(content);
-        WhatsappLogger.log("WPP script content injected, length: ${content.length}");
-        
+        WhatsappLogger.log(
+            "WPP script content injected, length: ${content.length}");
+
         // Give it a moment to parse and initialize
         await Future.delayed(const Duration(seconds: 1));
       } catch (e) {
@@ -307,39 +346,54 @@ class WppConnect {
           ''',
           tryPromise: false,
         );
-        
+
         if (result is Map) {
           bool present = result['present'] == true;
           bool isReady = result['isReady'] == true;
           bool webpackReady = result['webpackReady'] == true;
 
           // Goal: Both must be true, but if isReady is true and webpack is missing,
-          // it might be a version that changed internals. 
+          // it might be a version that changed internals.
           // However, standard wa-js uses webpack.isReady.
           if (present && (isReady || webpackReady)) {
-             // Second check: wait a bit more if webpackReady is false but isReady is true
-             if (isReady && !webpackReady && count < 5) {
-                // wait a bit more
-             } else {
-                return true;
-             }
+            // Second check: wait a bit more if webpackReady is false but isReady is true
+            if (isReady && !webpackReady && count < 5) {
+              // wait a bit more
+            } else {
+              return true;
+            }
           }
-          
+
           if (count % 5 == 0) {
-            WhatsappLogger.log("WPP Status: count=$count, present=$present, isReady=$isReady, webpackReady=$webpackReady");
+            WhatsappLogger.log(
+                "WPP Status: count=$count, present=$present, isReady=$isReady, webpackReady=$webpackReady");
           }
         } else {
           if (count % 5 == 0) {
-             WhatsappLogger.log("WPP Status: result is not a map: $result");
+            WhatsappLogger.log("WPP Status: result is not a map: $result");
           }
         }
       } catch (e) {
         // Ignore evaluation errors during boot
       }
-      
+
       await Future.delayed(const Duration(seconds: 1));
       count++;
     }
     return false;
   }
+}
+
+class _InitArgs {
+  const _InitArgs({
+    this.wppJsContent,
+    this.wppVersion,
+    this.config,
+    this.autoTakeover = true,
+  });
+
+  final String? wppJsContent;
+  final String? wppVersion;
+  final Map<String, dynamic>? config;
+  final bool autoTakeover;
 }
