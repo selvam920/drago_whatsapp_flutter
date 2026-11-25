@@ -42,6 +42,36 @@ class WppConnect {
   }
 
   static Future<void> _ensureReady(WpClientInterface wpClient) async {
+    await ensureInjected(wpClient);
+    if (await linkState(wpClient) == WppLinkState.loggedOut) {
+      // WhatsApp unlinked this device (phone offline ~14 days, removed
+      // under Linked devices, a security check). Tell the app, so it shows
+      // the QR again, and fail the send in plain words.
+      await reportLogout(wpClient);
+      throw const WhatsappException(
+        exceptionType: WhatsappExceptionType.unAuthorized,
+        message: 'WhatsApp is logged out on this device. '
+            'Open WhatsApp settings and scan the QR code again.',
+      );
+    }
+  }
+
+  /// One re-injection at a time per client (see [_ensuring]).
+  static final Expando<Future<void>> _injecting = Expando('wppInjecting');
+
+  /// Puts wa-js back -- same version, config and listeners as the last
+  /// [init] -- when the page lost it (WhatsApp Web reloaded). Unlike
+  /// [ensureReady] it never reports or throws a logout, so it is safe while
+  /// a new login is still pairing.
+  static Future<void> ensureInjected(WpClientInterface wpClient) {
+    final running = _injecting[wpClient];
+    if (running != null) return running;
+    final run = _ensureInjected(wpClient);
+    _injecting[wpClient] = run;
+    return run.whenComplete(() => _injecting[wpClient] = null);
+  }
+
+  static Future<void> _ensureInjected(WpClientInterface wpClient) async {
     if (!wpClient.isConnected()) {
       // Disconnected: fail now instead of injecting into nothing and
       // waiting out the 60 s ready timeout.
@@ -56,33 +86,32 @@ class WppConnect {
       "!!window.WPP.chat;",
       tryPromise: false,
     );
-    if (ok != true && ok?.toString() != 'true') {
-      WhatsappLogger.log(
-        'WPP missing before send (page reloaded?), injecting again',
-      );
-      final args = _initArgs[wpClient] ?? const _InitArgs();
-      await init(
-        wpClient,
-        wppJsContent: args.wppJsContent,
-        wppVersion: args.wppVersion,
-        config: args.config,
-        autoTakeover: args.autoTakeover,
-      );
-      // The reload dropped the JS side of every listener too -- without
-      // this a later logout from the phone never reached the app.
-      await wpClient.restoreListeners();
+    if (ok == true || ok?.toString() == 'true') return;
+    WhatsappLogger.log('WPP missing (page reloaded?), injecting again');
+    // A script injected into a page that is still loading is lost with it.
+    for (var i = 0; i < 15; i++) {
+      try {
+        final state = await wpClient.evaluateJs(
+          'document.readyState',
+          tryPromise: false,
+        );
+        if (state?.toString() == 'complete') break;
+      } catch (_) {
+        // Between documents; ask again.
+      }
+      await Future.delayed(const Duration(seconds: 1));
     }
-    if (await linkState(wpClient) == WppLinkState.loggedOut) {
-      // WhatsApp unlinked this device (phone offline ~14 days, removed
-      // under Linked devices, a security check). Tell the app, so it shows
-      // the QR again, and fail the send in plain words.
-      await reportLogout(wpClient);
-      throw const WhatsappException(
-        exceptionType: WhatsappExceptionType.unAuthorized,
-        message: 'WhatsApp is logged out on this device. '
-            'Open WhatsApp settings and scan the QR code again.',
-      );
-    }
+    final args = _initArgs[wpClient] ?? const _InitArgs();
+    await init(
+      wpClient,
+      wppJsContent: args.wppJsContent,
+      wppVersion: args.wppVersion,
+      config: args.config,
+      autoTakeover: args.autoTakeover,
+    );
+    // The reload dropped the JS side of every listener too -- without
+    // this a later logout from the phone never reached the app.
+    await wpClient.restoreListeners();
   }
 
   /// Is the WhatsApp Web page linked, logged out, or without wa-js (gone)?

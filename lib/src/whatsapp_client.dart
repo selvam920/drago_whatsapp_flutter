@@ -55,6 +55,12 @@ class WhatsappClient {
   /// [ConnectionEvent.disconnected] was reported and not yet undone.
   bool _offlineReported = false;
 
+  /// Checks in a row that got no answer from the page.
+  int _failedChecks = 0;
+
+  /// After this many unanswered checks the browser counts as dead.
+  static const int maxFailedChecks = 3;
+
   /// WhatsApp can unlink this device at any time (phone offline ~14 days,
   /// removed under Linked devices, a security check), and WhatsApp Web
   /// reloads its page when it updates. Either one used to go unseen until a
@@ -64,36 +70,60 @@ class WhatsappClient {
   /// A lost connection (no internet, phone unreachable) is reported once as
   /// [ConnectionEvent.disconnected], and its return as
   /// [ConnectionEvent.connected], so apps queue sends meanwhile.
+  ///
+  /// The browser itself can die too (Android kills the renderer, Windows
+  /// sleep takes WebView2 down): the page then stops answering, or the
+  /// WebView stops running. That is reported as
+  /// [ConnectionEvent.disconnected] as well -- straight away when the
+  /// WebView is gone, after [maxFailedChecks] unanswered checks otherwise --
+  /// so the app can restart the browser instead of waiting forever.
   Future<void> _checkLink() async {
-    if (_checking || !isConnected) return;
+    if (_checking || _watchdog == null) return;
     _checking = true;
     try {
-      var state = await WppConnect.linkState(wpClient);
-      if (_watchdog == null || !isConnected) return;
-      if (state == WppLinkState.gone) {
+      if (!isConnected) {
+        _reportDown('browser not running');
+        return;
+      }
+      var state = await WppConnect.linkState(wpClient)
+          .timeout(_evalTimeout, onTimeout: () => WppLinkState.gone);
+      if (_watchdog == null) return;
+      if (state == WppLinkState.gone && isConnected) {
         try {
-          await WppConnect.ensureReady(wpClient);
+          await WppConnect.ensureReady(wpClient)
+              .timeout(const Duration(seconds: 90));
         } catch (_) {
           // ensureReady reports a logout itself; anything else is retried
           // on the next tick.
         }
-        if (_watchdog == null || !isConnected) return;
-        state = await WppConnect.linkState(wpClient);
+        if (_watchdog == null) return;
+        state = await WppConnect.linkState(wpClient)
+            .timeout(_evalTimeout, onTimeout: () => WppLinkState.gone);
       }
+      if (_watchdog == null) return;
+      if (state == WppLinkState.gone) {
+        _failedChecks++;
+        WhatsappLogger.log(
+            "link check: no answer from the page ($_failedChecks/$maxFailedChecks)");
+        if (!isConnected) {
+          _reportDown('browser not running');
+        } else if (_failedChecks >= maxFailedChecks) {
+          _reportDown('page not answering');
+        }
+        return;
+      }
+      _failedChecks = 0;
       if (state == WppLinkState.loggedOut && _wasLinked) {
         // Deduped in reportLogout, together with ensureReady's own report.
         await WppConnect.reportLogout(wpClient);
       } else if (state == WppLinkState.offline) {
-        if (!_offlineReported) {
-          _offlineReported = true;
-          await WppConnect.reportEvent(wpClient, 'disconnected');
-        }
+        _reportDown('WhatsApp offline');
       } else if (state == WppLinkState.linked) {
         _wasLinked = true;
         WppConnect.markLinked(wpClient);
         if (_offlineReported) {
           _offlineReported = false;
-          await WppConnect.reportEvent(wpClient, 'connected');
+          _emit(ConnectionEvent.connected);
         }
       }
     } catch (e) {
@@ -101,6 +131,22 @@ class WhatsappClient {
     } finally {
       _checking = false;
     }
+  }
+
+  static const Duration _evalTimeout = Duration(seconds: 20);
+
+  /// Reports [ConnectionEvent.disconnected] once until the link is back.
+  /// Straight into the stream: a dead page could not pass it on.
+  void _reportDown(String why) {
+    if (_offlineReported) return;
+    _offlineReported = true;
+    WhatsappLogger.log("WhatsApp disconnected: $why");
+    _emit(ConnectionEvent.disconnected);
+  }
+
+  void _emit(ConnectionEvent event) {
+    final controller = _wppEvents.connectionEventStreamController;
+    if (!controller.isClosed) controller.add(event);
   }
 
   /// To list to any event from WPP
