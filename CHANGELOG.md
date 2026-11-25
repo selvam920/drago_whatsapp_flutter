@@ -98,3 +98,9 @@
 
 - Fix "No LID for user": sends to a phone number resolve it first (`contact.queryWidExists`), which looks up and caches its LID; a number without WhatsApp now fails with "Not on WhatsApp: <number>". Groups and channels pass through.
 - `chat.getChats` and `group.getAllGroups` return plain maps (`id`, `name`, `isGroup`, ...) instead of null.
+
+## 0.3.2
+
+- New login: the QR goes as soon as the phone scans it. The scan is detected on the page itself (WhatsApp Web reloads right after it), `ConnectionEvent.authenticated` is sent then, the QR loop stops, and the QR timeout no longer fires once scanned. The chats get their own wait (240 s for a new link).
+- wa-js is injected again whenever the page reloaded (`WppConnect.ensureInjected`); "Authentication lost" only after the page is really back on the QR.
+- The link watchdog reports `disconnected` when the WebView died or stops answering, and `connected` when it answers again; page checks have time limits.
