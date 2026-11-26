@@ -357,9 +357,6 @@ class WppConnect {
         await wpClient.injectJs(content);
         WhatsappLogger.log(
             "WPP script content injected, length: ${content.length}");
-
-        // Give it a moment to parse and initialize
-        await Future.delayed(const Duration(seconds: 1));
       } catch (e) {
         throw WhatsappException(
           exceptionType: WhatsappExceptionType.failedToConnect,
@@ -371,7 +368,7 @@ class WppConnect {
     }
 
     // Wait for WPP to be fully initialized and Webpack modules to be ready
-    if (!await _waitForWppReady(wpClient, 60)) {
+    if (!await _waitForWppReady(wpClient, const Duration(seconds: 60))) {
       throw const WhatsappException(
         exceptionType: WhatsappExceptionType.failedToConnect,
         message: "Timed out waiting for WPP to be ready",
@@ -452,12 +449,17 @@ class WppConnect {
     }
   }
 
+  /// Polled every [_readyPoll] (it was once a second plus a fixed second
+  /// after the injection: up to two seconds lost before the QR every start).
+  static const Duration _readyPoll = Duration(milliseconds: 250);
+
   static Future<bool> _waitForWppReady(
     WpClientInterface wpClient,
-    int tryCount,
+    Duration within,
   ) async {
+    final started = DateTime.now();
     int count = 0;
-    while (count < tryCount) {
+    while (DateTime.now().difference(started) < within) {
       try {
         var result = await wpClient.evaluateJs(
           '''
@@ -487,19 +489,21 @@ class WppConnect {
           // However, standard wa-js uses webpack.isReady.
           if (present && (isReady || webpackReady)) {
             // Second check: wait a bit more if webpackReady is false but isReady is true
-            if (isReady && !webpackReady && count < 5) {
+            if (isReady &&
+                !webpackReady &&
+                DateTime.now().difference(started).inSeconds < 5) {
               // wait a bit more
             } else {
               return true;
             }
           }
 
-          if (count % 5 == 0) {
+          if (count % 20 == 0) {
             WhatsappLogger.log(
                 "WPP Status: count=$count, present=$present, isReady=$isReady, webpackReady=$webpackReady");
           }
         } else {
-          if (count % 5 == 0) {
+          if (count % 20 == 0) {
             WhatsappLogger.log("WPP Status: result is not a map: $result");
           }
         }
@@ -507,7 +511,7 @@ class WppConnect {
         // Ignore evaluation errors during boot
       }
 
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(_readyPoll);
       count++;
     }
     return false;

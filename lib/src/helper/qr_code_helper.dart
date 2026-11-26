@@ -98,6 +98,60 @@ class LoginPageState {
       'reg=$registered mode=$streamMode info=$streamInfo';
 }
 
+/// Shows the QR the moment WhatsApp Web draws it, while wa-js is still
+/// being injected and started -- that alone used to keep "Opening WhatsApp
+/// Web..." up for many seconds after the code was already on the page. It
+/// reads the page itself (no wa-js needed) and hands each new code to
+/// [onQr]; [stop] ends it before the normal scan wait takes over with
+/// [lastCode].
+class EarlyQrWatcher {
+  EarlyQrWatcher(this.wpClient, this.onQr);
+
+  final WpClientInterface wpClient;
+  final void Function(QrCodeImage qr) onQr;
+
+  /// The last code shown, or null when none was.
+  String? lastCode;
+  bool _stopped = false;
+
+  void start() => _run();
+
+  void stop() => _stopped = true;
+
+  Future<void> _run() async {
+    while (!_stopped) {
+      try {
+        final r = await wpClient.evaluateJs(
+          '''(function() {
+            try {
+              var c = document.querySelector('canvas');
+              if (!c || c.width <= 1 || c.height <= 1) return null;
+              var d = c.closest('[data-ref]');
+              var ref = d ? d.getAttribute('data-ref') : null;
+              if (!ref) return null;
+              return {urlCode: ref, base64Image: c.toDataURL()};
+            } catch (e) { return null; }
+          })()''',
+          tryPromise: false,
+        );
+        if (_stopped) return;
+        if (r is Map) {
+          final code = r['urlCode']?.toString();
+          final image = r['base64Image']?.toString();
+          if (code != null && image != null && code != lastCode) {
+            lastCode = code;
+            WhatsappLogger.log('QR code on the page (before wa-js is ready)');
+            onQr(QrCodeImage(base64Image: image, urlCode: code));
+          }
+        }
+      } catch (_) {
+        // Page still loading or between documents; look again.
+      }
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+  }
+}
+
 /// Shows each new QR through [onCatchQR] until the phone scans it, and
 /// returns as soon as the scan itself is seen -- not after the chats load.
 ///
@@ -105,16 +159,18 @@ class LoginPageState {
 /// never cut off: once the page leaves the QR screen (WhatsApp reloads it
 /// after a scan) the wait runs on until the page says what happened.
 /// When [isStopped] turns true (the login finished another way) the wait
-/// returns without showing another QR.
+/// returns without showing another QR. [shownQrCode] is a code the app
+/// already shows (see [EarlyQrWatcher]); it is not shown twice.
 Future<void> waitForQrCodeScan({
   required WpClientInterface wpClient,
   int waitDurationSeconds = 60,
   Function(QrCodeImage, int)? onCatchQR,
   bool Function()? isStopped,
+  String? shownQrCode,
 }) async {
-  String? urlCode;
-  int attempt = 0;
-  bool qrShown = false;
+  String? urlCode = shownQrCode;
+  int attempt = shownQrCode == null ? 0 : 1;
+  bool qrShown = shownQrCode != null;
   bool done = false;
   bool stopped() => done || (isStopped?.call() ?? false);
   final deadline = DateTime.now().add(Duration(seconds: waitDurationSeconds));
@@ -203,7 +259,8 @@ Future<void> waitForQrCodeScan({
           );
         }
       }
-      await Future.delayed(const Duration(milliseconds: 1000));
+      // Quick until the first code is up, then once a second.
+      await Future.delayed(Duration(milliseconds: qrShown ? 1000 : 400));
     }
   } finally {
     done = true;

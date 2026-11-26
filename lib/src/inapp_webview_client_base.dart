@@ -73,13 +73,16 @@ abstract class InAppWebViewClientBase implements WpClientInterface {
   Future<QrCodeImage?> getQrCode() async {
     try {
       if (Platform.isWindows) {
-        final hasCanvas = await evaluateJs(
-              "document.querySelector('canvas') != null",
-              tryPromise: false,
-            ) ==
-            true;
-        if (!hasCanvas) {
-          await Future.delayed(const Duration(seconds: 5));
+        // Not drawn yet: look again shortly (was a flat 5 s wait, which held
+        // up a code that came a moment later).
+        for (var i = 0; i < 12; i++) {
+          final hasCanvas = await evaluateJs(
+                "document.querySelector('canvas') != null",
+                tryPromise: false,
+              ) ==
+              true;
+          if (hasCanvas) break;
+          await Future.delayed(const Duration(milliseconds: 250));
         }
       }
 

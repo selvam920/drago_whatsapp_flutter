@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'package:drago_whatsapp_flutter/src/helper/qr_code_helper.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_bot_platform_interface.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_client.dart';
 import 'package:drago_whatsapp_flutter/whatsapp_inapp_client.dart';
@@ -46,34 +48,22 @@ class DragoWhatsappFlutter {
         onWebViewCreated?.call(wpClient.headlessInAppWebView);
       }
 
-      await WppConnect.init(
-        wpClient,
-        wppVersion: wppVersion,
-        wppJsContent: wppJsContent,
-        config: wppConfig,
-        autoTakeover: autoTakeover,
-      );
-
-      // Initialize Events before waiting for login to capture early events
-      final wppEvents = WppEvents(wpClient);
-      await wppEvents.init();
-
-      onConnectionEvent?.call(ConnectionEvent.waitingForLogin);
-
-      final loggedIn = await waitForLogin(
+      final loggedIn = await _initAndLogin(
         wpClient,
         onConnectionEvent: onConnectionEvent,
         onQrCode: onQrCode,
-        waitDurationSeconds: qrCodeWaitDurationSeconds,
+        qrCodeWaitDurationSeconds: qrCodeWaitDurationSeconds,
         skipQrScan: skipQrScan,
         wppVersion: wppVersion,
         wppJsContent: wppJsContent,
         wppConfig: wppConfig,
         autoTakeover: autoTakeover,
       );
+      final wppEvents = loggedIn.events;
 
-      if (!loggedIn) {
-        WhatsappLogger.log('Not authenticated. skipQrScan=true, returning null.');
+      if (!loggedIn.ok) {
+        WhatsappLogger.log(
+            'Not authenticated. skipQrScan=true, returning null.');
         await wpClient.dispose();
         onWebViewCreated?.call(null);
         return null;
@@ -117,32 +107,23 @@ class DragoWhatsappFlutter {
       wpClient = WhatsappInAppFlutterClient(controller: controller);
       wpClient.sessionPath =
           null; // InAppBrowser might not expose session path easily or it's handled by controller
-      await WppConnect.init(
-        wpClient,
-        wppVersion: wppVersion,
-        wppJsContent: wppJsContent,
-        config: wppConfig,
-        autoTakeover: autoTakeover,
-      );
-
-      // Initialize Events before waiting for login to capture early events
-      final wppEvents = WppEvents(wpClient);
-      await wppEvents.init();
-
-      final loggedIn = await waitForLogin(
+      final loggedIn = await _initAndLogin(
         wpClient,
         onConnectionEvent: onConnectionEvent,
         onQrCode: onQrCode,
-        waitDurationSeconds: qrCodeWaitDurationSeconds,
+        qrCodeWaitDurationSeconds: qrCodeWaitDurationSeconds,
         skipQrScan: skipQrScan,
         wppVersion: wppVersion,
         wppJsContent: wppJsContent,
         wppConfig: wppConfig,
         autoTakeover: autoTakeover,
+        reportWaiting: false,
       );
+      final wppEvents = loggedIn.events;
 
-      if (!loggedIn) {
-        WhatsappLogger.log('Not authenticated. skipQrScan=true, returning null.');
+      if (!loggedIn.ok) {
+        WhatsappLogger.log(
+            'Not authenticated. skipQrScan=true, returning null.');
         await wpClient.dispose();
         return null;
       }
@@ -158,6 +139,81 @@ class DragoWhatsappFlutter {
     }
   }
 
+  /// Injects wa-js, attaches the events and waits for the login. While wa-js
+  /// loads (seconds on a slow PC), the QR WhatsApp Web already drew is shown
+  /// straight from the page by an [EarlyQrWatcher] -- never for a quiet
+  /// [skipQrScan] start, which must not show a QR.
+  static Future<({bool ok, WppEvents events})> _initAndLogin(
+    WpClientInterface wpClient, {
+    required Function(ConnectionEvent)? onConnectionEvent,
+    required Function(String qrCodeUrl, Uint8List? qrCodeImage)? onQrCode,
+    required int qrCodeWaitDurationSeconds,
+    required bool skipQrScan,
+    required String? wppVersion,
+    required String? wppJsContent,
+    required Map<String, dynamic>? wppConfig,
+    required bool autoTakeover,
+    bool reportWaiting = true,
+  }) async {
+    EarlyQrWatcher? early;
+    if (!skipQrScan && onQrCode != null) {
+      var told = false;
+      early = EarlyQrWatcher(wpClient, (qr) {
+        Uint8List? bytes;
+        try {
+          bytes = base64Decode(qr.base64Image!
+              .replaceFirst(RegExp(r'data:image\/[a-zA-Z]+;base64,'), ''));
+        } catch (e) {
+          WhatsappLogger.log('Error decoding QR image: $e');
+          return;
+        }
+        // The apps show a QR while the last event is waitingForQrScan.
+        if (!told) {
+          told = true;
+          onConnectionEvent?.call(ConnectionEvent.waitingForQrScan);
+        }
+        onQrCode(qr.urlCode!, bytes);
+      })
+        ..start();
+    }
+    try {
+      await WppConnect.init(
+        wpClient,
+        wppVersion: wppVersion,
+        wppJsContent: wppJsContent,
+        config: wppConfig,
+        autoTakeover: autoTakeover,
+      );
+
+      // Initialize Events before waiting for login to capture early events
+      final wppEvents = WppEvents(wpClient);
+      await wppEvents.init();
+      early?.stop();
+      final shown = early?.lastCode;
+
+      // A QR already up stays up: "waiting for login" would hide it.
+      if (reportWaiting && shown == null) {
+        onConnectionEvent?.call(ConnectionEvent.waitingForLogin);
+      }
+
+      final ok = await waitForLogin(
+        wpClient,
+        onConnectionEvent: onConnectionEvent,
+        onQrCode: onQrCode,
+        waitDurationSeconds: qrCodeWaitDurationSeconds,
+        skipQrScan: skipQrScan,
+        wppVersion: wppVersion,
+        wppJsContent: wppJsContent,
+        wppConfig: wppConfig,
+        autoTakeover: autoTakeover,
+        shownQrCode: shown,
+      );
+      return (ok: ok, events: wppEvents);
+    } finally {
+      early?.stop();
+    }
+  }
+
   /// to run webView in headless mode and connect with it
   static Future<WhatsappFlutterClient> _getHeadLessInAppBrowser(
     bool keepSession, {
@@ -169,20 +225,23 @@ class DragoWhatsappFlutter {
 
     if (!keepSession && !Platform.isWindows) {
       await InAppWebViewController.clearAllCache();
-    } 
+    }
 
-     WebViewEnvironment? environment;
+    WebViewEnvironment? environment;
 
-      if (keepSession && !kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-     final availableVersion = await WebViewEnvironment.getAvailableVersion();
+    if (keepSession &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.windows) {
+      final availableVersion = await WebViewEnvironment.getAvailableVersion();
       assert(availableVersion != null,
-           'Failed to find an installed WebView2 runtime or non-stable Microsoft Edge installation.');
+          'Failed to find an installed WebView2 runtime or non-stable Microsoft Edge installation.');
       // WebView2 can fail transiently (e.g. "device is not ready" right after
       // wake or while the runtime updates), so retry a few times.
       for (var attempt = 1;; attempt++) {
         try {
           environment = await WebViewEnvironment.create(
-              settings: WebViewEnvironmentSettings(userDataFolder: sessionPath));
+              settings:
+                  WebViewEnvironmentSettings(userDataFolder: sessionPath));
           break;
         } catch (e) {
           if (attempt >= 3) rethrow;

@@ -21,12 +21,13 @@ Future<bool> waitForLogin(
   String? wppJsContent,
   Map<String, dynamic>? wppConfig,
   bool autoTakeover = true,
+  String? shownQrCode,
 }) async {
   WhatsappLogger.log('Checking authentication status...');
   final wppAuth = WppAuth(wpClient);
 
   // Brief delay to let the page and WPP state settle
-  await Future.delayed(const Duration(milliseconds: 500));
+  await Future.delayed(const Duration(milliseconds: 150));
   bool authenticated = await wppAuth.isAuthenticated();
 
   if (!authenticated && skipQrScan) {
@@ -76,6 +77,7 @@ Future<bool> waitForLogin(
             }
           },
           waitDurationSeconds: waitDurationSeconds,
+          shownQrCode: shownQrCode,
         ),
         authCompleter.future,
       ]);

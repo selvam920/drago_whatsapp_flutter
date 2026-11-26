@@ -104,3 +104,8 @@
 - New login: the QR goes as soon as the phone scans it. The scan is detected on the page itself (WhatsApp Web reloads right after it), `ConnectionEvent.authenticated` is sent then, the QR loop stops, and the QR timeout no longer fires once scanned. The chats get their own wait (240 s for a new link).
 - wa-js is injected again whenever the page reloaded (`WppConnect.ensureInjected`); "Authentication lost" only after the page is really back on the QR.
 - The link watchdog reports `disconnected` when the WebView died or stops answering, and `connected` when it answers again; page checks have time limits.
+
+## 0.3.3
+
+- The QR shows as soon as WhatsApp Web draws it: it is read straight from the page while wa-js is still being injected and started (`EarlyQrWatcher`), never on a `skipQrScan` start. The scan wait then carries on with that code.
+- Less fixed waiting before the QR: no 1 s pause after injecting wa-js, readiness checked every 250 ms, a 150 ms settle instead of 500 ms, the QR looked for every 400 ms until the first one, and `getQrCode` checks for the canvas every 250 ms instead of sleeping 5 s on Windows.
