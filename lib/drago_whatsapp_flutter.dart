@@ -9,6 +9,66 @@ import 'package:drago_inappwebview/drago_inappwebview.dart';
 import 'package:flutter/foundation.dart';
 
 class DragoWhatsappFlutter {
+  /// Android: sends WhatsApp Web's connections through [proxy] --
+  /// `user:password@host:port` or `host:port` -- or straight out when null.
+  ///
+  /// For an app whose process is bound to a Wi-Fi without internet (to reach
+  /// a LAN server) while mobile data has it: the app's own loopback proxy
+  /// over mobile data takes WhatsApp Web out. Applies to every WebView in
+  /// the app (Android's proxy override is process wide) and to a WhatsApp
+  /// Web already open (its next connections). The user/password answer the
+  /// proxy's 407. A no-op off Android, or where the WebView cannot take a
+  /// proxy override (older System WebView).
+  static Future<void> setProxy(String? proxy) {
+    final next = _proxyOp.then((_) => _applyProxy(_WebViewProxy.parse(proxy)));
+    _proxyOp = next.catchError((Object _) {});
+    return next;
+  }
+
+  static Future<void> _proxyOp = Future.value();
+  static _WebViewProxy? _proxy;
+
+  static Future<void> _applyProxy(_WebViewProxy? next) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (next?.key == _proxy?.key) return;
+    try {
+      final controller = ProxyController.instance();
+      if (next == null) {
+        await controller.clearProxyOverride();
+      } else {
+        await controller.setProxyOverride(
+          settings: ProxySettings(
+            proxyRules: [ProxyRule(url: '${next.host}:${next.port}')],
+            bypassRules: const ['<local>'],
+          ),
+        );
+      }
+      _proxy = next;
+    } catch (e) {
+      WhatsappLogger.log('setProxy failed: $e');
+    }
+  }
+
+  /// The proxy's own 407 (see [setProxy]); any other sign-in request is
+  /// turned down, as before.
+  static Future<HttpAuthResponse?> _answerAuth(
+    InAppWebViewController controller,
+    HttpAuthenticationChallenge challenge,
+  ) async {
+    final proxy = _proxy;
+    if (proxy != null &&
+        proxy.username != null &&
+        challenge.protectionSpace.host == proxy.host &&
+        challenge.previousFailureCount <= 3) {
+      return HttpAuthResponse(
+        username: proxy.username!,
+        password: proxy.password ?? '',
+        action: HttpAuthResponseAction.PROCEED,
+      );
+    }
+    return HttpAuthResponse(action: HttpAuthResponseAction.CANCEL);
+  }
+
   /// [connect] will initialize the connection to Whatsapp Web
   /// it will return [WhatsappClient] if connection is successful
   static Future<WhatsappClient?> connect({
@@ -297,6 +357,7 @@ class DragoWhatsappFlutter {
           );
         }
       },
+      onReceivedHttpAuthRequest: _answerAuth,
       onJsConfirm: (controller, jsConfirmRequest) async =>
           JsConfirmResponse(action: JsConfirmResponseAction.CONFIRM),
       onJsAlert: (controller, jsAlertRequest) async =>
@@ -358,6 +419,39 @@ class DragoWhatsappFlutter {
 
 /// Accepts any TLS certificate for every host -- do not install globally.
 @Deprecated('Disables TLS certificate validation app-wide; will be removed.')
+
+/// A [DragoWhatsappFlutter.setProxy] address.
+class _WebViewProxy {
+  final String host;
+  final int port;
+  final String? username;
+  final String? password;
+  const _WebViewProxy(this.host, this.port, this.username, this.password);
+
+  String get key => '$username:$password@$host:$port';
+
+  /// `user:password@host:port` / `host:port`; null for null or anything
+  /// else.
+  static _WebViewProxy? parse(String? proxy) {
+    if (proxy == null || proxy.trim().isEmpty) return null;
+    var rest = proxy.trim();
+    String? user, pass;
+    final at = rest.lastIndexOf('@');
+    if (at >= 0) {
+      final cred = rest.substring(0, at);
+      rest = rest.substring(at + 1);
+      final colon = cred.indexOf(':');
+      user = colon < 0 ? cred : cred.substring(0, colon);
+      pass = colon < 0 ? null : cred.substring(colon + 1);
+    }
+    final colon = rest.lastIndexOf(':');
+    if (colon <= 0) return null;
+    final port = int.tryParse(rest.substring(colon + 1));
+    if (port == null || port <= 0 || port > 65535) return null;
+    return _WebViewProxy(rest.substring(0, colon), port, user, pass);
+  }
+}
+
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {

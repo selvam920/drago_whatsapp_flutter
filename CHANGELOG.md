@@ -109,3 +109,7 @@
 
 - The QR shows as soon as WhatsApp Web draws it: it is read straight from the page while wa-js is still being injected and started (`EarlyQrWatcher`), never on a `skipQrScan` start. The scan wait then carries on with that code.
 - Less fixed waiting before the QR: no 1 s pause after injecting wa-js, readiness checked every 250 ms, a 150 ms settle instead of 500 ms, the QR looked for every 400 ms until the first one, and `getQrCode` checks for the canvas every 250 ms instead of sleeping 5 s on Windows.
+
+## 0.3.4
+
+* Android: `DragoWhatsappFlutter.setProxy` sends WhatsApp Web through a proxy (with Basic proxy auth) -- for an app bound to a Wi-Fi without internet while mobile data has it.
