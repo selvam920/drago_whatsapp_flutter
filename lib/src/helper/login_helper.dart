@@ -109,8 +109,6 @@ Future<bool> waitForLogin(
     onConnectionEvent?.call(ConnectionEvent.authenticated);
   }
 
-  await Future.delayed(const Duration(milliseconds: 200));
-
   WhatsappLogger.log('Waiting for connection to be ready...');
   onConnectionEvent?.call(ConnectionEvent.connecting);
 
@@ -125,6 +123,9 @@ Future<bool> waitForLogin(
     // the chats already on this computer.
     timeoutSeconds: freshLogin ? 240 : 120,
     reloadAfterSeconds: freshLogin ? 120 : 70,
+    // A restart has its chats on this computer: wa-js saying "loaded" is
+    // enough, no 10 s wait for the sync (sends work before it ends).
+    quickStart: !freshLogin,
   );
   if (!isReady) {
     throw const WhatsappException(
@@ -165,6 +166,12 @@ Future<bool> _confirmLinked(WpClientInterface wpClient, Duration within) async {
   }
 }
 
+/// [waitForInChat] checks this often (it was once a second).
+const Duration _inChatPoll = Duration(milliseconds: 400);
+
+/// Checks in a row on the QR screen before the link counts as lost (~5 s).
+const int _lostChecks = 12;
+
 /// Waits up to [timeoutSeconds] for the chat screen. One check at a time --
 /// a slow check is never overlapped by the next one -- and a single page
 /// reload at [reloadAfterSeconds], after which WPP is injected again with
@@ -173,6 +180,10 @@ Future<bool> _confirmLinked(WpClientInterface wpClient, Duration within) async {
 /// A page that reloads by itself (WhatsApp Web does after a scan) loses
 /// wa-js: it is put back, never read as a lost login. Only a page back on
 /// the QR screen counts as lost.
+///
+/// [quickStart] (a restart of a linked computer) returns as soon as wa-js
+/// reports the main screen loaded, instead of waiting up to 10 s more for
+/// the sync. Checks run every [_inChatPoll], not every second.
 Future<bool> waitForInChat(
   WpClientInterface wpClient, {
   String? wppVersion,
@@ -181,6 +192,7 @@ Future<bool> waitForInChat(
   bool autoTakeover = true,
   int timeoutSeconds = 120,
   int reloadAfterSeconds = 70,
+  bool quickStart = false,
 }) async {
   final wppAuth = WppAuth(wpClient);
   var readyEvent = false;
@@ -193,6 +205,7 @@ Future<bool> waitForInChat(
   var startTime = DateTime.now();
   bool reloaded = false;
   int lostChecks = 0;
+  var lastLog = -1;
 
   try {
     while (true) {
@@ -217,6 +230,11 @@ Future<bool> waitForInChat(
         }
 
         if (await wppAuth.isMainReady()) return true;
+
+        if (quickStart && await wppAuth.isMainLoadedNative()) {
+          WhatsappLogger.log("Main loaded (restart), not waiting for sync");
+          return true;
+        }
 
         final isLoaded = await wppAuth.isMainLoaded();
         final isSynced = await wppAuth.isSynced();
@@ -246,21 +264,22 @@ Future<bool> waitForInChat(
           continue;
         }
 
-        // Back on the QR screen, a few checks in a row: the link is gone.
+        // Back on the QR screen for about 5 s of checks: the link is gone.
         lostChecks = state.showsQr ? lostChecks + 1 : 0;
-        if (lostChecks >= 5) {
+        if (lostChecks >= _lostChecks) {
           WhatsappLogger.log("Authentication lost while waiting for main.");
           return false;
         }
 
-        if (seconds > 0 && seconds % 10 == 0) {
+        if (seconds > 0 && seconds % 10 == 0 && seconds != lastLog) {
+          lastLog = seconds;
           WhatsappLogger.log(
               "Waiting for main ready... ($state, Loaded: $isLoaded, Synced: $isSynced, Time: $seconds/${timeoutSeconds}s)");
         }
       } catch (e) {
         WhatsappLogger.log("waitForInChat check failed: $e");
       }
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(_inChatPoll);
     }
   } finally {
     try {

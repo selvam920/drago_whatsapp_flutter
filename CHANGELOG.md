@@ -113,3 +113,4 @@
 ## 0.3.4
 
 * Android: `DragoWhatsappFlutter.setProxy` sends WhatsApp Web through a proxy (with Basic proxy auth) -- for an app bound to a Wi-Fi without internet while mobile data has it.
+* A linked computer starts faster: once wa-js reports the chat screen loaded, the start is done (no 10 s wait for the sync); chat-screen checks every 400 ms instead of every second; no 200 ms pause before them. A new login keeps its full wait.

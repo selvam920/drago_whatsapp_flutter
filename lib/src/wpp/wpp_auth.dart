@@ -65,6 +65,21 @@ class WppAuth {
       return false;
     }
   }
+
+  /// wa-js's own "main loaded" only, without the page-shape guesses of
+  /// [isMainLoaded]: trusted enough to call a restart connected at once.
+  Future<bool> isMainLoadedNative() async {
+    try {
+      final result = await wpClient.evaluateJs(
+        '''typeof window.WPP !== 'undefined' && window.WPP.conn.isMainLoaded();''',
+        tryPromise: false,
+      );
+      return result == true || result?.toString() == "true";
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// check if data is synced
   Future<bool> isSynced() async {
     try {
